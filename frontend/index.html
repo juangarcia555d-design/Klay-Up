@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es" data-theme="default">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Galería</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Mi Galería</h1>
+    <div class="controls">
+      <button id="playMusic">▶ Música</button>
+      <div class="theme">
+        <label>Color principal:</label>
+        <input type="color" id="colorPicker" value="#4f46e5">
+        <button class="preset" data-color="#111827">Oscuro</button>
+        <button class="preset" data-color="#4f46e5">Azul</button>
+        <button class="preset" data-color="#059669">Verde</button>
+        <button class="preset" data-color="#dc2626">Rojo</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-category="">Galería</button>
+    <button class="tab" data-category="FOTOS">Fotos</button>
+    <button class="tab" data-category="RECUERDOS">Recuerdos</button>
+  </nav>
+
+  <main>
+    <section class="upload">
+      <h2>Subir foto</h2>
+      <form id="uploadForm">
+        <input type="text" name="title" placeholder="Título" required>
+        <textarea name="description" placeholder="Descripción"></textarea>
+        <label>Fecha de la foto</label>
+        <input type="date" name="date_taken" required>
+        <label>Categoría</label>
+        <select name="category" required>
+          <option value="GALERIA">GALERIA</option>
+          <option value="FOTOS">FOTOS</option>
+          <option value="RECUERDOS">RECUERDOS</option>
+        </select>
+        <input type="file" name="file" accept="image/*" required>
+        <button type="submit">Subir</button>
+      </form>
+      <p class="hint">Nota: la música se reproduce cuando haces clic en “Música” por políticas de los navegadores.</p>
+    </section>
+
+    <section>
+      <h2 id="listTitle">Todas las fotos</h2>
+      <div id="gallery" class="grid"></div>
+    </section>
+  </main>
+
+  <audio id="bgMusic" loop>
+    <source src="music.mp3" type="audio/mpeg">
+  </audio>
+
+  <template id="cardTemplate">
+    <div class="card">
+      <img class="card-img" alt="">
+      <div class="card-body">
+        <h3 class="card-title"></h3>
+        <p class="card-desc"></p>
+        <p class="card-date"></p>
+        <p class="card-cat"></p>
+        <div class="card-actions">
+          <button class="edit">Editar</button>
+          <button class="delete">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <div id="editModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Editar foto</h3>
+      <form id="editForm">
+        <input type="text" name="title" required>
+        <textarea name="description"></textarea>
+        <label>Fecha</label>
+        <input type="date" name="date_taken" required>
+        <label>Categoría</label>
+        <select name="category" required>
+          <option value="GALERIA">GALERIA</option>
+          <option value="FOTOS">FOTOS</option>
+          <option value="RECUERDOS">RECUERDOS</option>
+        </select>
+        <div class="modal-actions">
+          <button type="submit">Guardar</button>
+          <button type="button" id="closeModal">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'https://TU_BACKEND.onrender.com';
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>
