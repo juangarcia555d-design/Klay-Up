@@ -5,10 +5,18 @@ const BUCKET = 'photos';
 export async function getPhotos(category) {
   let query = supabase
     .from('photos')
-    .select('id, title, description, date_taken, category, url') // 👈 selecciona url
+    .select('id, title, description, date_taken, category, url, user_id') // 👈 selecciona url
     .order('created_at', { ascending: false });
   if (category) query = query.eq('category', category);
   return query;
+}
+
+export async function getPhotosByUser(userId) {
+  return supabase
+    .from('photos')
+    .select('id, title, description, date_taken, category, url')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
 }
 
 export async function createPhoto(data) {
