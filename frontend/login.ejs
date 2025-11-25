@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es" data-theme="default">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ingresar — Klay-Up</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/auth/auth.css">
+  <link rel="stylesheet" href="/auth/login.css">
+</head>
+<body>
+  <main class="auth-page" id="authPage">
+    <div class="auth-wrapper">
+      <img src="/imagen/klay.png" alt="Klay logo" class="auth-logo" />
+      
+      <p>Inicia sesión para ver tu galería</p>
+      <form id="loginForm" method="post" action="/auth/login" accept-charset="utf-8">
+        <input type="email" name="email" placeholder="Correo" required>
+        <input type="password" name="password" placeholder="Contraseña" required>
+        <div id="loginError" class="form-error" aria-live="polite" style="display:none;"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button type="submit">Entrar</button>
+          <button type="button" id="googleLogin">Entrar con Google</button>
+        </div>
+      </form>
+      <p style="margin-top:12px;">¿No tienes cuenta? <a href="/register">Regístrate</a></p>
+    </div>
+  </main>
+
+  <script>
+    window.SUPABASE_URL = "<%= SUPABASE_URL %>" || '';
+    window.SUPABASE_ANON_KEY = "<%= SUPABASE_ANON_KEY %>" || '';
+    window.API_BASE = window.location.origin;
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+  <script src="/auth/auth.js" defer></script>
+  <script>
+    // Mostrar notificación si viene ?registered=1
+    (function(){
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('registered') === '1') {
+        alert('Registro exitoso. Por favor, inicia sesión con tus credenciales.');
+        history.replaceState({}, document.title, window.location.pathname);
+        return;
+      }
+      if (params.get('error') === '1') {
+        alert('Credenciales incorrectas. Por favor verifica tu correo y contraseña.');
+        history.replaceState({}, document.title, window.location.pathname);
+      }
+    })();
+  </script>
+</body>
+</html>

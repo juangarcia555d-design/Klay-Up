@@ -1,0 +1,135 @@
+<!doctype html>
+<%
+  const initialTheme = (user && user.theme && String(user.theme).trim() !== 'default') ? user.theme : '#ffffff';
+%>
+<html lang="es" data-theme="<%= initialTheme %>">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mi Perfil — Klay-Up</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/profile.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <main style="max-width:920px;margin:32px auto;padding:16px;">
+    <a href="/app" style="display:inline-block;margin-bottom:12px;">← Volver</a>
+    <section class="profile-full">
+      <div class="profile-hero">
+        <img id="profileFullAvatar" src="<%= user.avatar_url || '/imagen/default-avatar.png' %>" alt="Avatar" class="profile-avatar-large" />
+        <div class="profile-meta">
+          <h1><%= user.full_name || 'Sin nombre' %></h1>
+          <div class="muted"><%= user.email %></div>
+          <p class="profile-desc"><%= user.profile_description || '' %></p>
+          <div class="profile-actions">
+            <% if (typeof isOwner !== 'undefined' && isOwner) { %>
+              <a class="btn btn-primary" href="/app">Mi panel</a>
+            <% } %>
+            <a class="btn" href="/u/<%= user.id %>">Compartir</a>
+          </div>
+        </div>
+      </div>
+
+      <hr />
+
+      <% if (typeof isOwner !== 'undefined' && isOwner) { %>
+      <section class="profile-upload">
+        <h3>Subir fotos a tu galería</h3>
+        <form id="profileUploadForm" enctype="multipart/form-data">
+          <input type="text" name="title" placeholder="Título" />
+            <textarea name="description" placeholder="Descripción (máx 100 chars)" maxlength="100"></textarea>
+          <input type="date" name="date_taken" />
+          <select name="category">
+            <option value="GALERIA">GALERIA</option>
+            <option value="FOTOS">FOTOS</option>
+            <option value="RECUERDOS">RECUERDOS</option>
+          </select>
+          <input type="file" name="file" accept="image/*,video/*" multiple required />
+          <div style="margin-top:8px;"><button type="submit">Subir a mi galería</button></div>
+        </form>
+      </section>
+      <% } %>
+
+      <section style="margin-top:18px;">
+        <h3>Mis fotos</h3>
+        <div id="myPhotos" class="grid">
+          <% if (Array.isArray(photos) && photos.length) { %>
+            <% photos.forEach(function(it) { %>
+              <div class="card">
+                <% if (it.url && (it.url.toLowerCase().endsWith('.mp4') || it.url.toLowerCase().endsWith('.webm') || it.url.toLowerCase().endsWith('.ogg') || it.url.toLowerCase().endsWith('.mov') || it.url.toLowerCase().endsWith('.m4v'))) { %>
+                  <video class="card-video" controls style="max-width:100%;border-radius:6px;background:#000"><source src="<%= it.url %>" /></video>
+                <% } else { %>
+                  <img class="card-img" src="<%= it.url %>" alt="<%= it.title || 'Foto' %>" style="max-width:100%;border-radius:6px;" />
+                <% } %>
+                <div class="card-body">
+                  <h3 class="card-title"><%= it.title || '' %></h3>
+                  <p class="card-desc"><%= it.description || '' %></p>
+                </div>
+              </div>
+            <% }); %>
+          <% } else { %>
+            <div class="muted">No hay fotos en tu galería todavía.</div>
+          <% } %>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    window.SUPABASE_URL = "<%= SUPABASE_URL %>" || '';
+    window.SUPABASE_ANON_KEY = "<%= SUPABASE_ANON_KEY %>" || '';
+    window.API_BASE = window.location.origin;
+  </script>
+  <script>
+    (function(){
+      try {
+        const color = "<%= initialTheme %>" || '#ffffff';
+        function hexToRgb(hex) {
+          const h = hex.replace('#','');
+          const full = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
+          const bigint = parseInt(full, 16);
+          return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+        }
+        function luminance(r,g,b) {
+          const a = [r,g,b].map(v=>{ v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); });
+          return 0.2126*a[0] + 0.7152*a[1] + 0.0722*a[2];
+        }
+        document.documentElement.style.setProperty('--bg', color);
+        const [r,g,b] = hexToRgb(color);
+        const L = luminance(r,g,b);
+        const contrastWithWhite = (1.05) / (L + 0.05);
+        const contrastWithBlack = (L + 0.05) / 0.05;
+        const text = contrastWithWhite >= contrastWithBlack ? '#ffffff' : '#0b0f1a';
+        document.documentElement.style.setProperty('--text', text);
+        if (text === '#ffffff') {
+          document.documentElement.style.setProperty('--muted', '#d1d5db');
+          document.documentElement.setAttribute('data-theme','dark');
+        } else {
+          document.documentElement.style.setProperty('--muted', '#6b7280');
+          document.documentElement.setAttribute('data-theme','default');
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+  <script>
+    (function(){
+      const form = document.getElementById('profileUploadForm');
+      if (form) {
+        form.addEventListener('submit', async (e)=>{
+          e.preventDefault();
+          const fd = new FormData(form);
+          try {
+            const res = await fetch('/auth/profile/photos', { method: 'POST', credentials: 'include', body: fd });
+            if (!res.ok) {
+              const j = await res.json().catch(()=>null); alert((j&&j.error)?j.error:'Error'); return;
+            }
+            alert('Subido correctamente');
+            // Recargar la página para mostrar la nueva foto (simplifica render server-side)
+            window.location.reload();
+          } catch (err) { alert('Error subiendo: '+(err.message||err)); }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

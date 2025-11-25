@@ -1,0 +1,14 @@
+/* Login page styles — profesional y consistente con el sitio */
+:root{--bg:#f8fafc;--card:#ffffff;--muted:#6b7280;--accent:#4f46e5;--text:#0b0f1a}
+body{font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0}
+.auth-page{display:flex;align-items:center;justify-content:center;height:100vh}
+.auth-wrapper{background:var(--card);padding:32px;border-radius:12px;box-shadow:0 6px 20px rgba(10,10,10,0.06);width:420px;max-width:94%;text-align:center}
+.auth-wrapper h1{margin:0 0 8px;font-size:28px}
+.auth-wrapper p{margin:0 0 18px;color:var(--muted)}
+.auth-wrapper form{display:flex;flex-direction:column;gap:10px}
+.auth-wrapper input[type=email],.auth-wrapper input[type=password]{padding:12px;border:1px solid #e6e9ef;border-radius:8px;font-size:14px}
+.auth-wrapper button{background:var(--accent);color:#fff;padding:10px 12px;border:0;border-radius:8px;cursor:pointer}
+.auth-wrapper button[type=button]{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.form-error{color:#b91c1c;background:#fff6f6;padding:8px;border-radius:8px;border:1px solid #fca5a5;margin-top:6px;font-size:13px}
+.auth-wrapper a{color:var(--accent);text-decoration:none}
+@media (max-width:480px){.auth-wrapper{padding:20px;width:92%}}

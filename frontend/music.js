@@ -36,6 +36,7 @@
   function renderList(list){
     if (!musicList) return;
     musicList.innerHTML = '';
+    const audioEls = [];
     list.forEach(item => {
       const row = document.createElement('div');
       row.className = 'music-row';
@@ -54,6 +55,24 @@
       audio.controls = true;
       audio.preload = 'none';
       audio.style.maxWidth = '360px';
+      // Manejar reproducción nativa: pausar otros audios y mantener índice para avanzar secuencialmente
+      audio.addEventListener('play', () => {
+        try {
+          audioEls.forEach(a => { if (a !== audio) { try { a.pause(); } catch(e){} } });
+          // marcar índice actual
+          audio._playingIndex = audioEls.indexOf(audio);
+        } catch (e) { /* ignore */ }
+      });
+      // Cuando termine, reproducir la siguiente pista de la lista
+      audio.addEventListener('ended', () => {
+        try {
+          const idx = audioEls.indexOf(audio);
+          if (idx < 0) return;
+          const nextIdx = (idx + 1) < audioEls.length ? (idx + 1) : 0;
+          const next = audioEls[nextIdx];
+          if (next) try { next.play(); } catch(e){}
+        } catch (e) { console.error('Error advancing to next track', e); }
+      });
 
       const del = document.createElement('button');
       del.textContent = 'Eliminar';
@@ -68,10 +87,13 @@
 
       controls.appendChild(audio);
       controls.appendChild(del);
+      audioEls.push(audio);
       row.appendChild(info);
       row.appendChild(controls);
       musicList.appendChild(row);
     });
+    // Si queremos, pre-cargar duración de audios para mostrar barras más rápido
+    audioEls.forEach(a => { a.preload = 'metadata'; });
   }
 
   function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, (c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[c]); }

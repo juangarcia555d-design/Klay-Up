@@ -831,4 +831,45 @@ main {
   background: var(--primary);
 }
 
+/* Perfil popover */
+.profile-popover {
+  position: absolute;
+  min-width: 280px;
+  max-width: 360px;
+  background: color-mix(in srgb, var(--bg) 96%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  padding: 14px;
+  z-index: 120;
+  transition: transform 0.18s var(--transition-normal), opacity 0.18s var(--transition-normal);
+  opacity: 1;
+}
+.profile-popover.hidden { display: none; opacity: 0; transform: translateY(-6px); }
+.profile-popover .profile-header { display:flex; gap:12px; align-items:center; }
+.profile-popover .profile-name { font-weight:700; font-size:16px; }
+.profile-popover .profile-email { color:var(--muted); font-size:13px; }
+.profile-popover textarea { margin-top:10px; border:1px solid var(--border); border-radius:10px; padding:10px; width:100%; resize:vertical; background:var(--bg); color:var(--text); }
+.profile-popover .profile-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+.profile-popover .btn-logout { background: transparent; color: var(--text); border: 1px solid var(--border); padding:8px 12px; border-radius:10px; }
+.profile-popover .btn-save { background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color:#fff; border:none; padding:8px 12px; border-radius:10px; }
+
+/* Avatar improvements */
+.header-avatar { width:56px; height:56px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,0.8); box-shadow: var(--shadow-md); }
+.profile-avatar-large { width:96px; height:96px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,0.9); box-shadow: var(--shadow-xl); }
+
+/* small caret indicator */
+.profile-popover::after {
+  content: '';
+  position: absolute;
+  top: -8px;
+  right: 18px;
+  width: 12px;
+  height: 12px;
+  transform: rotate(45deg);
+  background: color-mix(in srgb, var(--bg) 96%, transparent);
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
 

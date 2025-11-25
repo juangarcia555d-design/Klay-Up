@@ -19,10 +19,54 @@ document.addEventListener('DOMContentLoaded', () => {
   let photosData = [];
   let currentIndex = -1;
 
-  // 🎵 Música
+  // 🎵 Música — reproductor global con cola accesible desde UI
   if (playMusicBtn && bgMusic) {
+    // Exponer un objeto global para controlar la reproducción desde otros scripts
+    window.musicPlayer = {
+      queue: [],
+      index: 0,
+      async loadQueue() {
+        try {
+          const res = await fetch(`${API_BASE}/api/music`);
+          if (!res.ok) return [];
+          this.queue = await res.json() || [];
+          if (this.queue.length && !bgMusic.src) {
+            this.index = 0;
+            bgMusic.src = this.queue[0].url;
+          }
+          return this.queue;
+        } catch (e) { console.warn('No se pudo cargar playlist', e); return []; }
+      },
+      async playUrl(url) {
+        try {
+          await this.loadQueue();
+          const idx = this.queue.findIndex(i => i.url === url);
+          this.index = idx >= 0 ? idx : 0;
+          bgMusic.src = url || (this.queue[this.index] && this.queue[this.index].url) || '';
+          try { await bgMusic.play(); } catch (e) { console.warn('Playback blocked', e); }
+        } catch (e) { console.warn('playUrl error', e); }
+      }
+    };
+
+    // Al terminar una pista, avanzar en la cola global
+    bgMusic.addEventListener('ended', async () => {
+      try {
+        const mp = window.musicPlayer;
+        if (!mp || !Array.isArray(mp.queue) || mp.queue.length === 0) return;
+        mp.index = (mp.index + 1) % mp.queue.length;
+        bgMusic.src = mp.queue[mp.index].url;
+        try { await bgMusic.play(); } catch (e) { console.warn('No se pudo reproducir siguiente pista', e); }
+      } catch (e) { console.warn('Error en ended handler', e); }
+    });
+
+    // Al hacer click en el botón Música abrimos el modal (sin autoplay)
     playMusicBtn.addEventListener('click', async () => {
-      try { await bgMusic.play(); } catch (e) { console.warn('No se pudo reproducir música', e); }
+      try {
+        const musicModal = document.getElementById('musicModal');
+        if (musicModal) { musicModal.classList.remove('hidden'); musicModal.setAttribute('aria-hidden','false'); }
+        // precargar cola en background para que los botones de reproducción sean inmediatos
+        window.musicPlayer.loadQueue().catch(()=>{});
+      } catch (e) { console.warn('No se pudo abrir gestor de música', e); }
     });
   }
 
@@ -70,14 +114,52 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (colorPicker) colorPicker.addEventListener('input', (e) => setBackgroundColor(e.target.value));
+  // Aplicar tema inicial según el valor actual del colorPicker (o el data-theme inyectado)
+  if (colorPicker && colorPicker.value) setBackgroundColor(colorPicker.value);
   if (presetBtns && presetBtns.length) {
     presetBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         const color = btn.dataset.color;
         setBackgroundColor(color);
+        // intentar guardar tema para el usuario autenticado y avisar si falla
+        (async () => {
+          try {
+            const res = await fetch(`${API_BASE}/auth/theme`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: color }) });
+            if (!res.ok) {
+              let msg = 'No se pudo guardar el tema.';
+              try { const j = await res.json(); if (j && j.error) msg = j.error; } catch(e){}
+              alert(msg + ' Revisa la consola del servidor.');
+            } else {
+              console.log('Tema guardado:', color);
+            }
+          } catch (e) {
+            console.error('Error guardando tema:', e);
+            alert('Error guardando tema. Revisa conexión o sesión.');
+          }
+        })();
       });
     });
   }
+
+  // Guardar tema cuando el usuario cambie el color picker
+  if (colorPicker) colorPicker.addEventListener('change', (e) => {
+    const color = e.target.value;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/theme`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: color }) });
+        if (!res.ok) {
+          let msg = 'No se pudo guardar el tema.';
+          try { const j = await res.json(); if (j && j.error) msg = j.error; } catch(e){}
+          alert(msg + ' Revisa la consola del servidor.');
+        } else {
+          console.log('Tema guardado:', color);
+        }
+      } catch (e) {
+        console.error('Error guardando tema:', e);
+        alert('Error guardando tema. Revisa conexión o sesión.');
+      }
+    })();
+  });
 
   // (Se usará delegación de eventos más abajo cuando exista `tabsContainer`)
 
@@ -186,26 +268,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Confirm dialog (simple, reusable) -> Promise<boolean>
   function showConfirm(message) {
+    // Modal centrado con overlay y estilo sencillo
     return new Promise((resolve) => {
-      const root = document.createElement('div');
-      root.className = 'confirm-modal';
-      root.innerHTML = `
-        <div class="confirm-card">
-          <h4>Confirmar</h4>
-          <p>${message}</p>
-          <div class="confirm-actions">
-            <button id="confirmCancel">Cancelar</button>
-            <button id="confirmOk">Eliminar</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(root);
-      const cancelBtn = root.querySelector('#confirmCancel');
-      const okBtn = root.querySelector('#confirmOk');
-      function cleanup(val) {
-        try { document.body.removeChild(root); } catch (e) {}
-        resolve(val);
-      }
+      const overlay = document.createElement('div');
+      overlay.style.position = 'fixed';
+      overlay.style.left = '0'; overlay.style.top = '0'; overlay.style.right = '0'; overlay.style.bottom = '0';
+      overlay.style.background = 'rgba(0,0,0,0.45)';
+      overlay.style.display = 'flex';
+      overlay.style.alignItems = 'center';
+      overlay.style.justifyContent = 'center';
+      overlay.style.zIndex = '99999';
+
+      const card = document.createElement('div');
+      card.style.background = 'var(--bg)';
+      card.style.color = 'var(--text)';
+      card.style.padding = '18px';
+      card.style.borderRadius = '12px';
+      card.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
+      card.style.maxWidth = '420px';
+      card.style.width = '90%';
+      card.innerHTML = `<h4 style="margin-top:0;margin-bottom:8px;">Confirmar</h4><p style="margin:0 0 12px 0;">${message}</p>`;
+
+      const actions = document.createElement('div');
+      actions.style.display = 'flex'; actions.style.justifyContent = 'flex-end'; actions.style.gap = '8px';
+      const cancelBtn = document.createElement('button'); cancelBtn.textContent = 'Cancelar';
+      cancelBtn.style.padding = '8px 12px'; cancelBtn.style.borderRadius = '8px';
+      const okBtn = document.createElement('button'); okBtn.textContent = 'Eliminar';
+      okBtn.style.padding = '8px 12px'; okBtn.style.borderRadius = '8px'; okBtn.style.background = '#e04848'; okBtn.style.color = '#fff'; okBtn.style.border = 'none';
+      actions.appendChild(cancelBtn); actions.appendChild(okBtn);
+      card.appendChild(actions);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+
+      function cleanup(val) { try { document.body.removeChild(overlay); } catch (e) {} resolve(val); }
       cancelBtn.addEventListener('click', () => cleanup(false));
       okBtn.addEventListener('click', () => cleanup(true));
     });
@@ -549,6 +644,114 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 🚀 Inicial
   fetchPhotos();
+
+  // Perfil de usuario: cargar datos y manejar panel
+  async function loadUserProfile() {
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+      if (!res.ok) return; // no autenticado
+      const j = await res.json();
+      if (!j || !j.ok) return;
+      const user = j.user || {};
+      // rellenar avatar en header
+      const avatarImg = document.getElementById('userAvatar');
+      const avatarLarge = document.getElementById('profileAvatarLarge');
+      if (avatarImg && user.avatar_url) avatarImg.src = user.avatar_url;
+      if (avatarLarge && user.avatar_url) avatarLarge.src = user.avatar_url;
+      const nameEl = document.getElementById('profileName');
+      if (nameEl) {
+        nameEl.textContent = user.full_name || '';
+        nameEl.style.cursor = 'pointer';
+        nameEl.addEventListener('click', () => { window.location.href = '/profile'; });
+      }
+      const emailEl = document.getElementById('profileEmail');
+      if (emailEl) emailEl.textContent = user.email || '';
+      const descEl = document.getElementById('profileDescription');
+      if (descEl) descEl.value = user.profile_description || '';
+      if (avatarLarge) {
+        avatarLarge.style.cursor = 'pointer';
+        avatarLarge.addEventListener('click', () => { window.location.href = '/profile'; });
+      }
+    } catch (e) { console.warn('No se pudo cargar perfil:', e); }
+  }
+
+  // Abrir/ cerrar panel perfil
+  const profilePanel = document.getElementById('profilePanel');
+  const closeProfileBtn = document.getElementById('closeProfile');
+  const saveProfileBtn = document.getElementById('saveProfileDesc');
+  const deleteProfileBtn = document.getElementById('deleteProfileDesc');
+  window.addEventListener('openProfilePanel', async () => {
+    await loadUserProfile();
+    if (!profilePanel) return;
+    // Position popover relative to avatar button
+    const avatarBtn = document.getElementById('profileBtn');
+    try {
+      const rect = avatarBtn.getBoundingClientRect();
+      // prefer right-aligned popover
+      const panelWidth = Math.min(window.innerWidth - 24, 360);
+      const top = rect.bottom + window.scrollY + 8;
+      const right = Math.max(12, window.innerWidth - rect.right - window.scrollX + 12);
+      profilePanel.style.top = top + 'px';
+      profilePanel.style.right = right + 'px';
+      profilePanel.style.left = 'auto';
+    } catch (e) { /* ignore positioning errors */ }
+    profilePanel.classList.remove('hidden'); profilePanel.setAttribute('aria-hidden','false');
+  });
+  if (closeProfileBtn) closeProfileBtn.addEventListener('click', () => { if (profilePanel) { profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true'); } });
+
+  if (saveProfileBtn) {
+    saveProfileBtn.addEventListener('click', async () => {
+      const textarea = document.getElementById('profileDescription');
+      if (!textarea) return;
+      const desc = textarea.value || '';
+      try {
+        const res = await fetch(`${API_BASE}/auth/profile`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: desc }) });
+        if (!res.ok) {
+          const j = await res.json().catch(()=>null);
+          alert((j && j.error) ? j.error : 'No se pudo guardar la descripción');
+          return;
+        }
+        alert('Descripción guardada');
+        await loadUserProfile();
+      } catch (e) { console.error('Error guardando descripción:', e); alert('Error guardando descripción'); }
+    });
+  }
+
+  if (deleteProfileBtn) {
+    deleteProfileBtn.addEventListener('click', async () => {
+      const ok = await showConfirm('¿Eliminar tu descripción de perfil? Esta acción no se puede deshacer.');
+      if (!ok) return;
+      try {
+        const res = await fetch(`${API_BASE}/auth/profile`, { method: 'DELETE', credentials: 'include' });
+        if (!res.ok) { const j = await res.json().catch(()=>null); alert((j && j.error) ? j.error : 'No se pudo eliminar'); return; }
+        alert('Descripción eliminada');
+        await loadUserProfile();
+      } catch (e) { console.error('Error eliminando descripción:', e); alert('Error eliminando descripción'); }
+    });
+  }
+
+  // Cerrar panel al hacer click fuera (delegación)
+  document.addEventListener('click', (ev) => {
+    try {
+      if (!profilePanel || profilePanel.classList.contains('hidden')) return;
+      const avatarBtn = document.getElementById('profileBtn');
+      if (avatarBtn && avatarBtn.contains(ev.target)) return;
+      if (profilePanel.contains(ev.target)) return;
+      profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true');
+    } catch (e) { /* ignore */ }
+  });
+
+  // Logout inside panel
+  const logoutInPanel = document.getElementById('logoutInPanel');
+  if (logoutInPanel) {
+    logoutInPanel.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', credentials: 'include' }); } catch (e) {}
+      window.location.href = '/login';
+    });
+  }
+
+  // Cargar perfil al iniciar
+  loadUserProfile();
 
   // ---- Lightbox / view modal ----
   const viewModal = document.getElementById('viewModal');

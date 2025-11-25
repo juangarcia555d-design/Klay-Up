@@ -1,0 +1,26 @@
+/* Estilos mínimos para el modal de autenticación */
+.modal.auth-content, #authModal .auth-content {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+#authModal .modal-content {
+  max-width:420px;
+  padding:18px;
+  border-radius:10px;
+}
+.auth-tabs { display:flex; gap:8px; margin-bottom:12px; }
+.auth-tabs button { padding:8px 12px; border-radius:8px; border:1px solid #e5e7eb; background:transparent; cursor:pointer; }
+.auth-tabs button.active { background:var(--card); }
+.auth-pane { display:block; }
+.auth-pane.hidden { display:none; }
+#authModal input[type="email"], #authModal input[type="password"], #authModal input[type="file"] {
+  width:100%; padding:8px; margin-bottom:8px; border-radius:6px; border:1px solid #e5e7eb;
+}
+#authModal button { padding:8px 12px; border-radius:8px; }
+/* Asegurar que el modal sobreponga al resto */
+#authModal.modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.45); z-index:9999; }
+#authModal.hidden { display:none !important; }
+/* Logo used in auth pages */
+.auth-logo{width:140px;height:auto;max-height:140px;object-fit:contain;border-radius:0;margin:0 auto 14px;display:block}
+.auth-wrapper .auth-logo{margin-bottom:18px}
