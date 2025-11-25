@@ -1,4 +1,6 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
+
+
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import crypto from 'crypto';
