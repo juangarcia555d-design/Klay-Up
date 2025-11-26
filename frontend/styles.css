@@ -181,7 +181,8 @@ button {
   flex-shrink: 0;
 }
 
-button::before {
+/* apply shimmer only to buttons that do NOT have the .no-shimmer class */
+button:not(.no-shimmer)::before {
   content: '';
   position: absolute;
   top: 0;
@@ -192,7 +193,7 @@ button::before {
   transition: left var(--transition-slow);
 }
 
-button:hover::before {
+button:not(.no-shimmer):hover::before {
   left: 100%;
 }
 

@@ -11,7 +11,7 @@
   <title>Galería</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
- <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=<%= Date.now() %>">
 
 </head>
 <body>
@@ -34,7 +34,7 @@
             <input id="searchProfiles" type="search" placeholder="Buscar perfiles..." style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);width:220px;" />
             <div id="searchResults" style="position:absolute;left:0;top:36px;background:var(--card);border:1px solid var(--border);border-radius:8px;display:none;min-width:220px;max-height:320px;overflow:auto;z-index:9999;padding:6px;"></div>
           </div>
-          <button id="profileBtn" title="Perfil" style="border:0;background:transparent;padding:0;position:relative;overflow:visible;">
+          <button id="profileBtn" class="no-shimmer" title="Perfil" style="border:0;background:transparent;padding:0;position:relative;overflow:visible;">
             <img id="userAvatar" class="header-avatar" src="/imagen/default-avatar.png" alt="Avatar" />
             <span id="avatarBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e11d48;color:#fff;border-radius:999px;padding:2px 6px;font-size:12px;min-width:18px;height:18px;line-height:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.18);">0</span>
           </button>

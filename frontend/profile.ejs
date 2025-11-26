@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Mi Perfil — Klay-Up</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=<%= Date.now() %>">
   <link rel="stylesheet" href="/profile.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 </head>
@@ -23,7 +23,7 @@
           <p class="profile-desc"><%= user.profile_description || '' %></p>
           <div style="margin-top:8px;display:flex;gap:12px;align-items:center;">
             <div style="font-weight:600;cursor:pointer;" id="followerCount">Seguidores: <span id="followerNum"><%= typeof followerCount !== 'undefined' ? followerCount : 0 %></span></div>
-            <div style="font-weight:600;">Siguiendo: <span id="followingNum"><%= typeof followingCount !== 'undefined' ? followingCount : 0 %></span></div>
+            <div style="font-weight:600;cursor:pointer;" id="followingCount">Siguiendo: <span id="followingNum"><%= typeof followingCount !== 'undefined' ? followingCount : 0 %></span></div>
           </div>
           <div class="profile-actions">
             <% if (typeof isOwner !== 'undefined' && isOwner) { %>
@@ -154,6 +154,28 @@
             document.body.appendChild(modal);
             modal.querySelector('#closeModal').addEventListener('click', ()=>modal.remove());
           } catch (e) { console.error(e); alert('Error al obtener seguidores'); }
+        });
+      }
+
+      const followingCountEl = document.getElementById('followingCount');
+      if (followingCountEl) {
+        followingCountEl.addEventListener('click', async () => {
+          try {
+            const res = await fetch(`/api/users/${profileUserId}/following`);
+            if (!res.ok) {
+              const j = await res.json().catch(()=>null); alert((j&&j.error)?j.error:'Error'); return;
+            }
+            const j = await res.json();
+            const list = (j.data || []).map(item => {
+              const u = item.user || item || {};
+              return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div>${u.full_name||u.email||u.id}</div></div>`;
+            }).join('');
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed'; modal.style.left='0'; modal.style.top='0'; modal.style.right='0'; modal.style.bottom='0'; modal.style.background='rgba(0,0,0,0.4)'; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center';
+            modal.innerHTML = `<div style="max-width:420px;width:90%;background:var(--bg);color:var(--text);padding:12px;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.2)"><div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'><strong>Siguiendo</strong><button id='closeModal'>Cerrar</button></div><div style='max-height:60vh;overflow:auto'>${list || '<div class="muted">No sigue a nadie</div>'}</div></div>`;
+            document.body.appendChild(modal);
+            modal.querySelector('#closeModal').addEventListener('click', ()=>modal.remove());
+          } catch (e) { console.error(e); alert('Error al obtener la lista de seguidos'); }
         });
       }
     })();
