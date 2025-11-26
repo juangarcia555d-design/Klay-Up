@@ -860,6 +860,15 @@ main {
 #profileBtn { outline: none; }
 #profileBtn:focus { outline: none; box-shadow: none; }
 #profileBtn:hover .header-avatar, #profileBtn:focus .header-avatar { border-color: rgba(255,255,255,0.5); box-shadow: var(--shadow-md); }
+
+/* Disable global button 'shimmer' effect only for the profile/avatar button
+  (the app uses a ::before shimmer on buttons; for the small avatar button
+  that creates an unwanted white flash next to the search box). */
+#profileBtn::before { display:none !important; }
+#profileBtn:hover, #profileBtn:active, #profileBtn:focus { transform: none !important; box-shadow: none !important; }
+
+/* Ensure the avatar image itself doesn't animate or flash */
+#profileBtn .header-avatar { transition: none !important; background: transparent !important; }
 .profile-avatar-large { width:96px; height:96px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,0.9); box-shadow: var(--shadow-xl); }
 
 /* small caret indicator */
