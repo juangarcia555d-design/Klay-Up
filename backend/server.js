@@ -7,9 +7,11 @@ import photoRoutes from './routes/photoRoutes.js';
 import musicRoutes from './routes/musicRoutes.js';
 import createAuthRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import { supabase } from './config/supabase.js';
+import { isFollowing, countFollowers, countFollowing } from './models/followModel.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -98,11 +100,26 @@ app.get('/profile', async (req, res) => {
     // obtener usuario
     const { data: userData, error: userErr } = await supabase.from('usuarios').select('id,email,full_name,avatar_url,profile_description,theme').eq('id', userId).limit(1).maybeSingle();
     if (userErr || !userData) return res.redirect('/login');
-    // obtener fotos del usuario
-    const { data: photosData } = await supabase.from('photos').select('id,title,description,date_taken,category,url').eq('user_id', userId).order('created_at', { ascending: false });
+    // obtener fotos del usuario (todo: el propietario ve todas, otros -> sólo públicas)
+    let photosData = [];
+    try {
+      const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', userId).order('created_at', { ascending: false });
+      photosData = data || [];
+    } catch (e) {
+      // si is_public no existe, obtener sin esa columna
+      try {
+        const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url').eq('user_id', userId).order('created_at', { ascending: false });
+        photosData = data || [];
+      } catch (e2) {
+        photosData = [];
+      }
+    }
     // refrescar cookie
     try { const maxDays = Number.isFinite(SESSION_MAX_DAYS) ? SESSION_MAX_DAYS : 30; const newToken = jwt.sign({ userId: decoded.userId, email: decoded.email }, SESSION_SECRET, { expiresIn: `${maxDays}d` }); res.cookie('session_token', newToken, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: maxDays * 24 * 60 * 60 * 1000, path: '/' }); } catch (e) {}
-    res.render('profile', { SUPABASE_URL: process.env.SUPABASE_URL || '', SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || '', user: userData, photos: photosData || [], isOwner: true });
+    // conseguir estadísticas de followers
+    const followers = await countFollowers(userId);
+    const following = await countFollowing(userId);
+    res.render('profile', { SUPABASE_URL: process.env.SUPABASE_URL || '', SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || '', user: userData, photos: photosData || [], isOwner: true, followerCount: followers.count || 0, followingCount: following.count || 0, isFollowing: false, viewerAuthenticated: true, currentUserId: userId });
   } catch (e) {
     console.error('/profile error', e);
     return res.redirect('/login');
@@ -115,8 +132,34 @@ app.get('/u/:id', async (req, res) => {
     const id = req.params.id;
     const { data: userData, error: userErr } = await supabase.from('usuarios').select('id,email,full_name,avatar_url,profile_description,theme').eq('id', id).limit(1).maybeSingle();
     if (userErr || !userData) return res.status(404).send('Perfil no encontrado');
-    const { data: photosData } = await supabase.from('photos').select('id,title,description,date_taken,category,url').eq('user_id', id).order('created_at', { ascending: false });
-    return res.render('profile', { SUPABASE_URL: process.env.SUPABASE_URL || '', SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || '', user: userData, photos: photosData || [], isOwner: false });
+    // comprobar si el visitante está autenticado y si es el dueño
+    const token = req.cookies?.session_token || null;
+    let viewerId = null;
+    try { if (token) viewerId = jwt.verify(token, SESSION_SECRET)?.userId || null; } catch (e) { viewerId = null; }
+
+    const viewerIsOwner = viewerId && Number(viewerId) === Number(id);
+
+    // si el visitante es el dueño, mostramos todas; si no, solo fotos públicas
+        let photosData = [];
+        try {
+          const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', id).order('created_at', { ascending: false });
+          photosData = data || [];
+        } catch (e) {
+          // si la columna is_public no existe en la DB, fall back a seleccionar por user_id (mostramos igual los uploads del usuario)
+          try {
+            const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url').eq('user_id', id).order('created_at', { ascending: false });
+            photosData = data || [];
+          } catch (e2) {
+            photosData = [];
+          }
+    }
+
+    // obtener counts y si el viewer sigue al usuario
+    const followers = await countFollowers(id);
+    const following = await countFollowing(id);
+    const rel = viewerId ? await isFollowing(viewerId, id) : { data: false };
+
+    return res.render('profile', { SUPABASE_URL: process.env.SUPABASE_URL || '', SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || '', user: userData, photos: photosData || [], isOwner: viewerIsOwner, followerCount: followers.count || 0, followingCount: following.count || 0, isFollowing: !!rel.data, viewerAuthenticated: !!viewerId, currentUserId: viewerId || null });
   } catch (e) {
     console.error('/u/:id error', e);
     return res.status(500).send('Error interno');
@@ -183,6 +226,7 @@ app.get('/debug', async (req, res) => {
 app.use('/api/photos', photoRoutes);
 app.use('/api/music', musicRoutes);
 app.use('/api/users', userRoutes(supabase));
+app.use('/api/messages', messageRoutes(supabase, SESSION_SECRET));
 
 // Iniciar servidor
 app.listen(PORT, () => {

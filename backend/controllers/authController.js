@@ -268,9 +268,16 @@ export function uploadProfilePhotosHandler(supabase, sessionSecret) {
           date_taken,
           category: file.mimetype && file.mimetype.startsWith('video/') ? 'VIDEO' : (category || 'GALERIA'),
           url,
-          user_id: userId
+          user_id: userId,
+          is_public: false
         };
-        const createResult = await createPhoto(payload);
+        let createResult = await createPhoto(payload);
+        // si la BD no tiene la columna is_public puede fallar; en ese caso reintentar sin is_public
+        if (createResult.error && /is_public/i.test(String(createResult.error.message || ''))) {
+          const fallback = { ...payload };
+          delete fallback.is_public;
+          createResult = await createPhoto(fallback);
+        }
         if (createResult.error) return res.status(500).json({ error: createResult.error.message || 'DB insert error' });
         results.push(createResult.data || createResult);
       }

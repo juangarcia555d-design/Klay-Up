@@ -17,17 +17,48 @@ export async function listPhotos(req, res) {
     // Si se solicita una categoría concreta, devolverla.
     // Si no se especifica categoría, ocultar videos para que sólo se vean en la pestaña VIDEO.
     if (category) {
-      const { data, error } = await getPhotos(category);
-      if (error) return res.status(500).json({ error: error.message });
-      return res.json(data);
+      // Sólo devolver fotos públicas cuando es una petición pública de galería
+      try {
+        const { data, error } = await getPhotos(category).eq('is_public', true);
+        if (error) return res.status(500).json({ error: error.message });
+        return res.json(data);
+      } catch (e) {
+        // Si la columna is_public no existe en la DB, caeremos a una regla segura: devolver solo filas *sin* user_id (públicas)
+        try {
+          const { data, error } = await getPhotos(category).is('user_id', null);
+          if (error) return res.status(500).json({ error: error.message });
+          return res.json(data);
+        } catch (e2) {
+          return res.status(500).json({ error: e2.message || 'Error interno' });
+        }
+      }
     }
 
     // No hay categoría -> excluir VIDEO
-    const { data, error } = await supabase
-      .from('photos')
-      .select('id, title, description, date_taken, category, url')
-      .neq('category', 'VIDEO')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('photos')
+        .select('id, title, description, date_taken, category, url')
+        .neq('category', 'VIDEO')
+        .eq('is_public', true)
+        .order('created_at', { ascending: false });
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json(data);
+    } catch (e) {
+      // fallback si is_public no existe: asumimos que las fotos con user_id son uploads de perfil y no deben mostrarse
+      try {
+        const { data, error } = await supabase
+          .from('photos')
+          .select('id, title, description, date_taken, category, url')
+          .neq('category', 'VIDEO')
+          .is('user_id', null)
+          .order('created_at', { ascending: false });
+        if (error) return res.status(500).json({ error: error.message });
+        return res.json(data);
+      } catch (e2) {
+        return res.status(500).json({ error: e2.message || 'Error interno' });
+      }
+    }
     if (error) return res.status(500).json({ error: error.message });
     res.json(data);
   } catch (e) {
@@ -79,7 +110,8 @@ export async function addPhoto(req, res) {
         date_taken,
         // Si el archivo es un video, forzamos la categoría VIDEO para que sólo se muestre en esa sección
         category: file.mimetype && file.mimetype.startsWith('video/') ? 'VIDEO' : (category || 'GALERIA'),
-        url
+        url,
+        is_public: true
       };
       console.log('DB payload:', payload);
 

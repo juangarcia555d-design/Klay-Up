@@ -855,7 +855,11 @@ main {
 .profile-popover .btn-save { background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color:#fff; border:none; padding:8px 12px; border-radius:10px; }
 
 /* Avatar improvements */
-.header-avatar { width:56px; height:56px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,0.8); box-shadow: var(--shadow-md); }
+.header-avatar { width:56px; height:56px; border-radius:50%; object-fit:cover; border:2px solid rgba(255,255,255,0.5); box-shadow: var(--shadow-md); transition: border-color 0.12s ease, box-shadow 0.12s ease; }
+/* Remove white hover 'flash' on avatar */
+#profileBtn { outline: none; }
+#profileBtn:focus { outline: none; box-shadow: none; }
+#profileBtn:hover .header-avatar, #profileBtn:focus .header-avatar { border-color: rgba(255,255,255,0.5); box-shadow: var(--shadow-md); }
 .profile-avatar-large { width:96px; height:96px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,0.9); box-shadow: var(--shadow-xl); }
 
 /* small caret indicator */

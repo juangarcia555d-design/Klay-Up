@@ -34,8 +34,9 @@
             <input id="searchProfiles" type="search" placeholder="Buscar perfiles..." style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);width:220px;" />
             <div id="searchResults" style="position:absolute;left:0;top:36px;background:var(--card);border:1px solid var(--border);border-radius:8px;display:none;min-width:220px;max-height:320px;overflow:auto;z-index:9999;padding:6px;"></div>
           </div>
-          <button id="profileBtn" title="Perfil" style="border:0;background:transparent;padding:0;">
+          <button id="profileBtn" title="Perfil" style="border:0;background:transparent;padding:0;position:relative;overflow:visible;">
             <img id="userAvatar" class="header-avatar" src="/imagen/default-avatar.png" alt="Avatar" />
+            <span id="avatarBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e11d48;color:#fff;border-radius:999px;padding:2px 6px;font-size:12px;min-width:18px;height:18px;line-height:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.18);">0</span>
           </button>
       </div>
     </div>
@@ -229,6 +230,25 @@
     <hr style="margin:12px 0; border:none; border-top:1px solid var(--border);" />
     <h4 style="margin:0 0 6px 0;">Perfil</h4>
     <textarea id="profileDescription" rows="4" placeholder="Escribe algo sobre ti..."></textarea>
+    
+    <hr style="margin:12px 0; border:none; border-top:1px solid var(--border);" />
+    <h4 style="margin:0 0 6px 0;">Bandeja de mensajes</h4>
+    <div id="panelInbox" style="max-height:220px;overflow:auto;margin-bottom:6px;padding:6px;border-radius:8px;background:rgba(0,0,0,0.03);">
+      <div class="muted" id="panelInboxEmpty">Cargando mensajes...</div>
+    </div>
+
+    <!-- Area de chat dentro del panel: oculto por defecto, se muestra al abrir una conversación -->
+    <div id="panelChat" style="display:none;margin-top:8px;border-radius:8px;padding:8px;background:rgba(0,0,0,0.02);max-height:280px;overflow:hidden;">
+      <div id="panelChatHeader" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div id="panelChatTitle" style="font-weight:700">Chat</div>
+        <div style="display:flex;gap:6px"><button id="panelBackToInbox" class="btn" style="padding:4px 8px">← Bandeja</button><button id="panelCloseChat" class="btn" style="padding:4px 8px">Cerrar</button></div>
+      </div>
+      <div id="panelChatBody" style="height:160px;overflow:auto;padding:6px;border-radius:6px;background:rgba(0,0,0,0.03);margin-bottom:6px"></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="panelChatInput" placeholder="Escribe un mensaje..." style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:inherit" />
+        <button id="panelChatSend" class="btn btn-primary">Enviar</button>
+      </div>
+    </div>
     <div class="profile-actions">
       <button id="deleteProfileDesc" class="btn-logout">Eliminar</button>
       <button id="logoutInPanel" class="btn-logout">Cerrar sesión</button>
@@ -237,6 +257,21 @@
   </div>
   <script src="app.js"></script>
   <script src="music.js" defer></script>
+
+  <!-- Chat drawer (fixed bottom) -->
+  <div id="chatDrawer" style="position:fixed;right:16px;bottom:16px;width:360px;max-width:calc(100% - 32px);background:var(--bg);color:var(--text);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.2);display:none;flex-direction:column;overflow:hidden;z-index:9999">
+    <div style="padding:8px 12px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between">
+      <div id="chatTitle" style="font-weight:700">Chat</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="chatClose" class="btn">Cerrar</button>
+      </div>
+    </div>
+    <div id="chatBody" style="padding:8px;max-height:320px;overflow:auto;background:transparent;display:flex;flex-direction:column;gap:8px"></div>
+    <div style="padding:8px;border-top:1px solid rgba(0,0,0,0.06);display:flex;gap:8px;align-items:center">
+      <input id="chatInput" placeholder="Escribe un mensaje..." style="flex:1;padding:8px;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:transparent;color:inherit" />
+      <button id="chatSend" class="btn btn-primary">Enviar</button>
+    </div>
+  </div>
 
   <!-- Music manager modal -->
   <div id="musicModal" class="modal hidden" aria-hidden="true">

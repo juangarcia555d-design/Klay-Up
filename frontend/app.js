@@ -653,6 +653,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const j = await res.json();
       if (!j || !j.ok) return;
       const user = j.user || {};
+      // Exponer id del usuario a otras funciones del frontend (para comparar envíos)
+      try { window.currentUserId = user.id || ''; } catch(e){}
       // rellenar avatar en header
       const avatarImg = document.getElementById('userAvatar');
       const avatarLarge = document.getElementById('profileAvatarLarge');
@@ -672,6 +674,9 @@ document.addEventListener('DOMContentLoaded', () => {
         avatarLarge.style.cursor = 'pointer';
         avatarLarge.addEventListener('click', () => { window.location.href = '/profile'; });
       }
+
+      // Cargar bandeja de mensajes dentro del panel (si existe) - usar helper
+      try { await refreshPanelInbox(); } catch (e) { console.warn('panelInbox load error', e); }
     } catch (e) { console.warn('No se pudo cargar perfil:', e); }
   }
 
@@ -696,6 +701,10 @@ document.addEventListener('DOMContentLoaded', () => {
       profilePanel.style.left = 'auto';
     } catch (e) { /* ignore positioning errors */ }
     profilePanel.classList.remove('hidden'); profilePanel.setAttribute('aria-hidden','false');
+    // cuando se abre el panel, asegurar que la bandeja aparezca (y ocultar chat si era visible)
+    try { const pc = document.getElementById('panelChat'); if (pc) pc.style.display = 'none'; const pi = document.getElementById('panelInbox'); if (pi) pi.style.display = 'block'; } catch(e){}
+    // empezar polling de la bandeja mientras el panel esté abierto
+    try { await refreshPanelInbox(true); startPanelInboxPoll(); } catch(e) { console.warn('panel open refresh failed', e); }
   });
   if (closeProfileBtn) closeProfileBtn.addEventListener('click', () => { if (profilePanel) { profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true'); } });
 
@@ -738,6 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (avatarBtn && avatarBtn.contains(ev.target)) return;
       if (profilePanel.contains(ev.target)) return;
       profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true');
+      try { stopPanelInboxPoll(); } catch(e){}
     } catch (e) { /* ignore */ }
   });
 
@@ -750,8 +760,190 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ---- Funcionalidad de chat dentro del panel ----
+  let panelChatPoll = null;
+  async function openPanelChat(withId, title) {
+    try {
+      // esconder bandeja y mostrar chat
+      const panelInboxEl = document.getElementById('panelInbox');
+      const panelChat = document.getElementById('panelChat');
+      const panelTitle = document.getElementById('panelChatTitle');
+      const panelBody = document.getElementById('panelChatBody');
+      const input = document.getElementById('panelChatInput');
+      const sendBtn = document.getElementById('panelChatSend');
+      const backBtn = document.getElementById('panelBackToInbox');
+      const closeBtn = document.getElementById('panelCloseChat');
+      if (!panelChat || !panelBody) return;
+      if (panelInboxEl) panelInboxEl.style.display = 'none';
+      panelChat.style.display = 'block';
+      if (panelTitle) panelTitle.textContent = title || 'Chat';
+
+      // helper to render messages
+      function renderPanelMessages(messages) {
+        if (!panelBody) return;
+        panelBody.innerHTML = '';
+        messages.forEach(m => {
+          const me = String(m.sender_id) === String(window.currentUserId || '');
+          const el = document.createElement('div');
+          el.style.display = 'flex';
+          el.style.justifyContent = me ? 'flex-end' : 'flex-start';
+          el.innerHTML = `<div style="max-width:80%;padding:8px;border-radius:8px;background:${me ? 'linear-gradient(90deg,#0ea5a0,#06b6d4)' : 'rgba(0,0,0,0.06)'};color:${me ? '#fff':'var(--text)'}">${escapeHtml(m.content)}<div style="font-size:10px;margin-top:6px;opacity:0.7;text-align:right">${(new Date(m.created_at)).toLocaleString()}</div></div>`;
+          panelBody.appendChild(el);
+        });
+        panelBody.scrollTop = panelBody.scrollHeight;
+      }
+
+      // load conversation once then enable polling
+      async function loadPanelConversation() {
+        try {
+          const res = await fetch(`${API_BASE}/api/messages/conversation/${withId}`, { credentials: 'include' });
+          if (!res.ok) return;
+          const j = await res.json();
+          const msgs = j.data || [];
+          renderPanelMessages(msgs);
+          // refrescar bandeja y badge (el endpoint de conversation ya marca como leido en servidor)
+          try { await refreshPanelInbox(); await refreshUnreadBadge(); } catch (e) { /* ignore */ }
+        } catch (e) { console.error('openPanelChat load error', e); }
+      }
+
+      // start polling
+      function startPanelPoll() {
+        stopPanelPoll();
+        panelChatPoll = setInterval(loadPanelConversation, 2500);
+      }
+      function stopPanelPoll() { if (panelChatPoll) { clearInterval(panelChatPoll); panelChatPoll = null; } }
+
+      // wire send
+      async function sendPanelMessage() {
+        const text = input && input.value && input.value.trim();
+        if (!text) return;
+        try {
+          const res = await fetch(`${API_BASE}/api/messages/send`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ to: withId, content: text }) });
+          if (!res.ok) { const j = await res.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error enviando'); return; }
+          input.value = '';
+          await loadPanelConversation();
+        } catch (e) { console.error('panel send error', e); }
+      }
+
+      // attach handlers
+      if (sendBtn) { sendBtn.onclick = sendPanelMessage; }
+      if (input) { input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendPanelMessage(); } }; }
+      if (backBtn) backBtn.onclick = () => { // volver a bandeja
+        if (panelChat) panelChat.style.display = 'none'; if (panelInboxEl) panelInboxEl.style.display = 'block'; stopPanelPoll();
+      };
+      if (closeBtn) closeBtn.onclick = () => { if (profilePanel) { profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true'); } stopPanelPoll(); };
+
+      await loadPanelConversation();
+      startPanelPoll();
+    } catch (e) { console.error('openPanelChat error', e); }
+  }
+
+  // Refresh helpers
+  async function refreshUnreadBadge() {
+    try {
+      const badge = document.getElementById('avatarBadge');
+      const r = await fetch(`${API_BASE}/api/messages/unread_count`, { credentials: 'include' });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j && typeof j.count !== 'undefined') {
+        if (j.count > 0) { if (badge) { badge.style.display='flex'; badge.textContent = String(j.count); } }
+        else { if (badge) badge.style.display='none'; }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  async function refreshPanelInbox() {
+    try {
+      const panelInbox = document.getElementById('panelInbox');
+      if (!panelInbox) return;
+      const inboxRes = await fetch(`${API_BASE}/api/messages/inbox`, { credentials: 'include' });
+      if (!inboxRes.ok) { panelInbox.innerHTML = '<div class="muted">No fue posible cargar la bandeja</div>'; return; }
+      const j = await inboxRes.json();
+      const rows = j.data || [];
+      if (!rows.length) { panelInbox.innerHTML = '<div class="muted">No tienes mensajes</div>'; return; }
+      // rows have { sender_id, user, unread, last_message }
+      const nodes = rows.map(r => {
+        const u = r.user || { id: r.sender_id };
+        const unread = r.unread || 0;
+        const last = r.last_message || {};
+        const avatar = (u && u.avatar_url) ? u.avatar_url : '/imagen/default-avatar.png';
+        const name = u.full_name || u.email || ('Usuario ' + (u.id || r.sender_id));
+        return `<div class="panel-inbox-item" data-sender="${r.sender_id}" style="display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid rgba(0,0,0,0.06);cursor:pointer;background:${unread>0 ? 'linear-gradient(90deg, rgba(225,29,72,0.06), transparent)' : 'transparent'}"><img src='${avatar}' style='width:36px;height:36px;border-radius:999px;object-fit:cover' /><div style='flex:1'><div style='display:flex;justify-content:space-between;align-items:center'><div style='font-weight:600'>${escapeHtml(name)}</div>${unread>0?`<div style='background:#e11d48;color:#fff;border-radius:999px;padding:2px 8px;font-size:12px'>${unread}</div>`:''}</div><div style='font-size:12px;color:var(--muted);max-height:36px;overflow:hidden'>${escapeHtml(last.content || '')}</div></div></div>`;
+      }).join('');
+      panelInbox.innerHTML = nodes;
+      panelInbox.querySelectorAll('.panel-inbox-item').forEach(n => n.addEventListener('click', async () => {
+        const sid = n.getAttribute('data-sender'); if (!sid) return; openGlobalChat(sid, 'Usuario ' + sid);
+      }));
+    } catch (e) { console.error('refreshPanelInbox error', e); }
+  }
+
   // Cargar perfil al iniciar
   loadUserProfile();
+
+  // Poll unread badge every 8s
+  setInterval(() => { try { refreshUnreadBadge(); } catch(e) {} }, 8000);
+
+  // ---- Global bottom chat drawer (used from panel inbox) ----
+  let gpoll = null;
+  const gchatDrawer = document.getElementById('chatDrawer');
+  const gchatBody = document.getElementById('chatBody');
+  const gchatTitle = document.getElementById('chatTitle');
+  const gchatInput = document.getElementById('chatInput');
+  const gchatSend = document.getElementById('chatSend');
+  const gchatClose = document.getElementById('chatClose');
+
+  function renderGMessages(messages) {
+    if (!gchatBody) return;
+    gchatBody.innerHTML = '';
+    messages.forEach(m => {
+      const me = (String(m.sender_id) === String(window.currentUserId || ''));
+      const el = document.createElement('div');
+      el.style.display = 'flex'; el.style.justifyContent = me ? 'flex-end' : 'flex-start';
+      el.innerHTML = `<div style="max-width:78%;padding:6px;border-radius:8px;background:${me ? 'linear-gradient(90deg,#0ea5a0,#06b6d4)' : 'rgba(0,0,0,0.06)'};color:${me ? '#fff' : 'var(--text)'}">${escapeHtml(m.content)}<div style="font-size:10px;margin-top:6px;opacity:0.7;text-align:right">${(new Date(m.created_at)).toLocaleString()}</div></div>`;
+      gchatBody.appendChild(el);
+    });
+    gchatBody.scrollTop = gchatBody.scrollHeight;
+  }
+
+  async function loadGConversation(withId) {
+    if (!withId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/messages/conversation/${withId}`, { credentials: 'include' });
+      if (!res.ok) return;
+      const j = await res.json();
+      const msgs = j.data || [];
+      renderGMessages(msgs);
+    } catch (e) { console.error('loadGConversation', e); }
+  }
+
+  async function openGlobalChat(withId, title) {
+    if (!window.currentUserId) { alert('Necesitas iniciar sesión para enviar mensajes'); return; }
+    if (!gchatDrawer) return;
+    // set title
+    if (gchatTitle) gchatTitle.textContent = title || 'Chat';
+    gchatDrawer.style.display = 'flex';
+    // load and start polling
+    await loadGConversation(withId);
+    try { await refreshPanelInbox(); await refreshUnreadBadge(); } catch(e){}
+    stopGPoll(); gpoll = setInterval(()=> loadGConversation(withId), 2500);
+    // attach send
+    if (gchatSend) {
+      gchatSend.onclick = async () => {
+        const text = gchatInput && gchatInput.value && gchatInput.value.trim();
+        if (!text) return;
+        try {
+          const res = await fetch(`${API_BASE}/api/messages/send`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ to: withId, content: text }) });
+          if (!res.ok) { const j = await res.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error enviando'); return; }
+          if (gchatInput) gchatInput.value = '';
+          await loadGConversation(withId);
+        } catch (e) { console.error('sendGlobalChatError', e); }
+      };
+    }
+    if (gchatInput) gchatInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (gchatSend) gchatSend.click(); } };
+    if (gchatClose) gchatClose.onclick = () => { gchatDrawer.style.display = 'none'; stopGPoll(); };
+  }
+
+  function stopGPoll(){ if (gpoll) { clearInterval(gpoll); gpoll = null; } }
 
   // ---- Lightbox / view modal ----
   const viewModal = document.getElementById('viewModal');
@@ -776,6 +968,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (viewVideo) { viewVideo.style.display = 'none'; viewVideo.pause(); viewVideo.src = ''; }
       if (viewImage) { viewImage.style.display = 'block'; viewImage.src = item.url || ''; viewImage.alt = item.title || 'Foto'; }
     }
+      
     if (viewTitle) viewTitle.textContent = item.title || '';
     viewModal.classList.remove('hidden');
     viewModal.setAttribute('aria-hidden', 'false');

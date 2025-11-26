@@ -11,12 +11,14 @@ export async function getPhotos(category) {
   return query;
 }
 
-export async function getPhotosByUser(userId) {
-  return supabase
+export async function getPhotosByUser(userId, { includePrivate = false } = {}) {
+  let q = supabase
     .from('photos')
-    .select('id, title, description, date_taken, category, url')
+    .select('id, title, description, date_taken, category, url, is_public')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
+  if (!includePrivate) q = q.eq('is_public', true);
+  return q;
 }
 
 export async function createPhoto(data) {
