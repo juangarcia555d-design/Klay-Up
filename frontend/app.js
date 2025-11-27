@@ -579,17 +579,49 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    uploadForm.addEventListener('submit', async (e) => {
+    uploadForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const form = new FormData(uploadForm);
-      try {
-        const res = await fetch(`${API_BASE}/api/photos`, { method: 'POST', body: form });
-        if (!res.ok) throw new Error('Error al subir');
-        uploadForm.reset();
-        fetchPhotos();
-      } catch (err) {
-        alert('No se pudo subir la foto: ' + err.message);
+      // create or reuse a progress bar
+      let progress = uploadForm.querySelector('.upload-progress');
+      if (!progress) {
+        progress = document.createElement('div');
+        progress.className = 'upload-progress';
+        progress.style.height = '8px';
+        progress.style.background = 'rgba(0,0,0,0.08)';
+        progress.style.borderRadius = '6px';
+        progress.style.overflow = 'hidden';
+        progress.style.marginTop = '8px';
+        const inner = document.createElement('div'); inner.className = 'upload-progress-inner'; inner.style.width = '0%'; inner.style.height = '100%'; inner.style.background = 'linear-gradient(90deg,#6b46c1,#7c3aed)'; inner.style.transition = 'width 120ms linear'; progress.appendChild(inner);
+        uploadForm.appendChild(progress);
       }
+      const innerBar = progress.querySelector('.upload-progress-inner');
+
+      // Use XHR to get progress events
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/api/photos`);
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (ev) => {
+        if (!ev.lengthComputable) return;
+        const pct = Math.round((ev.loaded / ev.total) * 100);
+        if (innerBar) innerBar.style.width = pct + '%';
+      };
+      xhr.onload = async () => {
+        try {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            uploadForm.reset();
+            if (innerBar) innerBar.style.width = '100%';
+            await fetchPhotos();
+            setTimeout(()=>{ try { if (progress) progress.remove(); } catch(e){} }, 600);
+          } else {
+            const msg = xhr.responseText || 'Error al subir';
+            alert('No se pudo subir la foto: ' + msg);
+            try { if (progress) progress.remove(); } catch(e){}
+          }
+        } catch (err) { alert('Error procesando la subida: ' + err.message); }
+      };
+      xhr.onerror = () => { alert('Error al subir el archivo'); try { if (progress) progress.remove(); } catch(e){} };
+      xhr.send(form);
     });
   }
 
@@ -672,11 +704,52 @@ document.addEventListener('DOMContentLoaded', () => {
       if (descEl) descEl.value = user.profile_description || '';
       if (avatarLarge) {
         avatarLarge.style.cursor = 'pointer';
-        avatarLarge.addEventListener('click', () => { window.location.href = '/profile'; });
+        avatarLarge.addEventListener('click', async () => {
+          // open an inline avatar picker modal
+          try {
+            const existing = document.getElementById('avatarPickerModalInline');
+            if (existing) { existing.style.display = 'flex'; return; }
+            const modal = document.createElement('div');
+            modal.id = 'avatarPickerModalInline';
+            modal.style.position = 'fixed'; modal.style.left = '0'; modal.style.top = '0'; modal.style.right = '0'; modal.style.bottom = '0'; modal.style.background = 'rgba(0,0,0,0.45)'; modal.style.display = 'flex'; modal.style.alignItems = 'center'; modal.style.justifyContent = 'center'; modal.style.zIndex = '1000000';
+            modal.innerHTML = `<div style="max-width:680px;width:94%;background:var(--bg);color:var(--text);padding:12px;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.25);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong>Seleccionar avatar</strong><button id='closeAvatarPickerInline' class='btn'>Cerrar</button></div><div id='avatarListInline' style='display:flex;gap:12px;flex-wrap:wrap;max-height:48vh;overflow:auto;padding:6px'>Cargando avatares...</div><hr style='margin:10px 0' /><div style='display:flex;gap:8px;align-items:center'><label style='font-weight:600'>Subir avatar</label><input id='avatarFileInline' type='file' accept='image/*' /><button id='avatarUploadBtnInline' class='btn btn-primary'>Subir</button><div id='avatarUploadProgressInline' style='flex:1;display:none;margin-left:8px;height:8px;background:rgba(0,0,0,0.06);border-radius:8px;overflow:hidden'><div style='height:100%;width:0%;background:linear-gradient(90deg,#6b46c1,#7c3aed);transition:width 120ms linear'></div></div></div></div>`;
+            document.body.appendChild(modal);
+            document.getElementById('closeAvatarPickerInline').addEventListener('click', ()=>{ modal.style.display='none'; });
+            // Populate avatars
+            try {
+              const r = await fetch('/api/avatars');
+              if (!r.ok) throw new Error('No avatars');
+              const j = await r.json();
+              const files = j && j.data ? (j.data||[]) : [];
+              const listEl = document.getElementById('avatarListInline');
+              listEl.innerHTML = '';
+              if (!files || !files.length) listEl.innerHTML = '<div class="muted">No hay avatares</div>';
+              files.forEach(f => {
+                const url = '/imagen/avatares/' + f;
+                const el = document.createElement('div'); el.style.padding='6px'; el.style.cursor='pointer'; el.style.width='72px'; el.style.height='72px'; el.style.display='flex'; el.style.justifyContent='center'; el.style.alignItems='center'; el.style.borderRadius='8px'; el.style.border='1px solid rgba(0,0,0,0.06)';
+                const img = document.createElement('img'); img.src = url; img.style.maxWidth='64px'; img.style.maxHeight='64px'; img.style.borderRadius='50%'; el.appendChild(img);
+                el.addEventListener('click', async ()=>{ try { const res = await fetch('/auth/profile/avatar', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ default_avatar: url }) }); if (!res.ok) { const rr = await res.json().catch(()=>null); alert((rr && rr.error) ? rr.error : 'Error'); return; } const jj = await res.json(); if (jj && jj.avatar) { if (avatarImg) avatarImg.src = jj.avatar; if (avatarLarge) avatarLarge.src = jj.avatar; } alert('Avatar actualizado'); modal.style.display='none'; } catch(e){console.error(e);alert('Error')}; });
+                listEl.appendChild(el);
+              });
+            } catch (e) { const listEl = document.getElementById('avatarListInline'); if (listEl) listEl.innerHTML = '<div class="muted">No se pudieron cargar avatares</div>'; }
+
+            // upload handler
+            document.getElementById('avatarUploadBtnInline').addEventListener('click', ()=>{
+              const f = document.getElementById('avatarFileInline').files[0]; if (!f) { alert('Selecciona un archivo'); return; }
+              const fd = new FormData(); fd.append('avatar', f);
+              const xhr = new XMLHttpRequest(); xhr.open('POST','/auth/profile/avatar'); xhr.withCredentials = true;
+              const progressWrap = document.getElementById('avatarUploadProgressInline'); progressWrap.style.display='block';
+              xhr.upload.onprogress = (ev)=>{ if (ev.lengthComputable) progressWrap.querySelector('div').style.width = Math.round((ev.loaded/ev.total)*100)+'%'; };
+              xhr.onload = async ()=>{ if (xhr.status>=200 && xhr.status <300) { const r = JSON.parse(xhr.responseText||'{}'); if (r && r.avatar) { if (avatarImg) avatarImg.src = r.avatar; if (avatarLarge) avatarLarge.src = r.avatar; } alert('Avatar actualizado'); modal.style.display='none'; } else { const rr = JSON.parse(xhr.responseText||'{}'); alert((rr && rr.error) ? rr.error : 'Error'); } progressWrap.style.display='none'; };
+              xhr.onerror=()=>{ alert('Error subiendo'); progressWrap.style.display='none'; };
+              xhr.send(fd);
+            });
+          } catch (e) { console.warn('open avatar picker failed', e); window.location.href = '/profile'; }
+        });
       }
 
-      // Cargar bandeja de mensajes dentro del panel (si existe) - usar helper
-      try { await refreshPanelInbox(); } catch (e) { console.warn('panelInbox load error', e); }
+      // Cargar burbujas de mensajes (si existen) dentro del panel - usar helper
+      try { await refreshPanelBubbles(); } catch (e) { console.warn('panel bubbles load error', e); }
     } catch (e) { console.warn('No se pudo cargar perfil:', e); }
   }
 
@@ -700,11 +773,13 @@ document.addEventListener('DOMContentLoaded', () => {
       profilePanel.style.right = right + 'px';
       profilePanel.style.left = 'auto';
     } catch (e) { /* ignore positioning errors */ }
+    // ensure the profile panel is on top of other floating UI (chat drawer, mini chats)
+    try { const chatDrawerEl = document.getElementById('chatDrawer'); if (chatDrawerEl) chatDrawerEl.style.zIndex = '9999'; profilePanel.style.zIndex = '1000000'; } catch(e){}
     profilePanel.classList.remove('hidden'); profilePanel.setAttribute('aria-hidden','false');
-    // cuando se abre el panel, asegurar que la bandeja aparezca (y ocultar chat si era visible)
-    try { const pc = document.getElementById('panelChat'); if (pc) pc.style.display = 'none'; const pi = document.getElementById('panelInbox'); if (pi) pi.style.display = 'block'; } catch(e){}
-    // empezar polling de la bandeja mientras el panel esté abierto
-    try { await refreshPanelInbox(true); startPanelInboxPoll(); } catch(e) { console.warn('panel open refresh failed', e); }
+    // cuando se abre el panel, asegurar que las burbujas se muestren (y ocultar chat si era visible)
+    try { const pc = document.getElementById('panelChat'); if (pc) pc.style.display = 'none'; const pb = document.getElementById('panelInboxBubbles'); if (pb) pb.style.display = 'flex'; } catch(e){}
+    // empezar polling de las burbujas mientras el panel esté abierto
+    try { await refreshPanelBubbles(); startPanelBubblePoll(); } catch(e) { console.warn('panel open refresh failed', e); }
   });
   if (closeProfileBtn) closeProfileBtn.addEventListener('click', () => { if (profilePanel) { profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true'); } });
 
@@ -747,7 +822,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (avatarBtn && avatarBtn.contains(ev.target)) return;
       if (profilePanel.contains(ev.target)) return;
       profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true');
-      try { stopPanelInboxPoll(); } catch(e){}
+      try { stopPanelBubblePoll(); } catch(e){}
     } catch (e) { /* ignore */ }
   });
 
@@ -762,10 +837,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Funcionalidad de chat dentro del panel ----
   let panelChatPoll = null;
+  let panelBubblePoll = null;
+  let panelBubblesInFlight = false;
   async function openPanelChat(withId, title) {
     try {
       // esconder bandeja y mostrar chat
-      const panelInboxEl = document.getElementById('panelInbox');
+      const panelInboxEl = document.getElementById('panelInboxBubbles');
       const panelChat = document.getElementById('panelChat');
       const panelTitle = document.getElementById('panelChatTitle');
       const panelBody = document.getElementById('panelChatBody');
@@ -802,7 +879,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const msgs = j.data || [];
           renderPanelMessages(msgs);
           // refrescar bandeja y badge (el endpoint de conversation ya marca como leido en servidor)
-          try { await refreshPanelInbox(); await refreshUnreadBadge(); } catch (e) { /* ignore */ }
+          try { await refreshPanelBubbles(); await refreshUnreadBadge(); } catch (e) { /* ignore */ }
         } catch (e) { console.error('openPanelChat load error', e); }
       }
 
@@ -828,8 +905,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // attach handlers
       if (sendBtn) { sendBtn.onclick = sendPanelMessage; }
       if (input) { input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendPanelMessage(); } }; }
-      if (backBtn) backBtn.onclick = () => { // volver a bandeja
-        if (panelChat) panelChat.style.display = 'none'; if (panelInboxEl) panelInboxEl.style.display = 'block'; stopPanelPoll();
+      if (backBtn) backBtn.onclick = () => { // volver a burbujas
+        if (panelChat) panelChat.style.display = 'none'; if (panelInboxEl) panelInboxEl.style.display = 'flex'; stopPanelPoll();
       };
       if (closeBtn) closeBtn.onclick = () => { if (profilePanel) { profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true'); } stopPanelPoll(); };
 
@@ -877,11 +954,241 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { console.error('refreshPanelInbox error', e); }
   }
 
+  // ---- New: show compact chat bubbles for unread senders in the profile panel ----
+  async function refreshPanelBubbles() {
+    const container = document.getElementById('panelInboxBubbles');
+    if (!container) return;
+    if (panelBubblesInFlight) return;
+    panelBubblesInFlight = true;
+    try {
+      container.innerHTML = '<div class="muted panel-bubbles-empty">Cargando mensajes...</div>';
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 7000);
+      console.debug('[debug] refreshPanelBubbles -> requesting /api/messages/inbox');
+      const res = await fetch(`${API_BASE}/api/messages/inbox`, { credentials: 'include', signal: controller.signal });
+      clearTimeout(t);
+      console.debug('[debug] refreshPanelBubbles -> status', res.status);
+      if (!res.ok) { container.innerHTML = ''; return; }
+      let j = null;
+      try { j = await res.json(); } catch (e) { console.debug('[debug] refreshPanelBubbles invalid json', e); container.innerHTML = ''; return; }
+      const rows = (j && j.data) ? (j.data || []) : [];
+      // only show senders with unread > 0
+      const unread = (rows || []).filter(r => (r.unread || 0) > 0);
+      if (!unread.length) { container.innerHTML = ''; return; }
+      // render bubble buttons
+      container.innerHTML = '';
+      unread.forEach(r => {
+        const u = r.user || { id: r.sender_id };
+        const avatar = (u && u.avatar_url) ? u.avatar_url : '/imagen/default-avatar.png';
+        const name = u.full_name || u.email || ('Usuario ' + (u.id || r.sender_id));
+        const btn = document.createElement('button');
+        btn.className = 'panel-chat-bubble';
+        btn.title = `Abrir chat con ${name}`;
+        btn.setAttribute('data-sender', String(r.sender_id));
+        btn.innerHTML = `<img src="${avatar}" alt="${escapeHtml(name)}" /><div class=\"bubble-unread\">${r.unread}</div>`;
+          btn.addEventListener('click', () => {
+            // open a mini chat window instead of the large drawer
+            openMiniChat(r.sender_id, name, avatar);
+          });
+        container.appendChild(btn);
+      });
+    } catch (e) {
+      console.error('refreshPanelBubbles error', e);
+      container.innerHTML = '';
+    } finally { panelBubblesInFlight = false; }
+  }
+
+  function startPanelBubblePoll() { try { stopPanelBubblePoll(); panelBubblePoll = setInterval(() => { try { refreshPanelBubbles(); } catch(e){} }, 9000); } catch(e){} }
+  function stopPanelBubblePoll() { try { if (panelBubblePoll) { clearInterval(panelBubblePoll); panelBubblePoll = null; } } catch(e){} }
+
   // Cargar perfil al iniciar
   loadUserProfile();
 
   // Poll unread badge every 8s
   setInterval(() => { try { refreshUnreadBadge(); } catch(e) {} }, 8000);
+
+  // Side floating bubbles for incoming/unread conversations
+  // helper: escape HTML content for safe insertion into innerHTML
+  function escapeHtml(s){ return String(s||'').replace(/[&<>"]+/g, (c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  let sideBubblesPoll = null;
+  let sideContainer = document.getElementById('sideChatBubbles');
+  // if the template didn't include the container for any reason, create it dynamically
+  if (!sideContainer) {
+    console.debug('[debug] sideChatBubbles container not found in DOM, creating dynamically');
+    try {
+      sideContainer = document.createElement('div');
+      sideContainer.id = 'sideChatBubbles';
+      sideContainer.style.position = 'fixed';
+      sideContainer.style.right = '12px';
+      sideContainer.style.top = '40%';
+      sideContainer.style.display = 'flex';
+      sideContainer.style.flexDirection = 'column';
+      sideContainer.style.gap = '10px';
+      sideContainer.style.zIndex = '99999';
+      sideContainer.style.pointerEvents = 'auto';
+      document.body.appendChild(sideContainer);
+    } catch (e) { console.warn('[debug] could not create sideChatBubbles container', e); }
+  }
+
+  // track bubbles user closed manually so polling doesn't recreate them
+  // store as map { userId: timestampMs }
+  function loadClosedBubbles() {
+    try { const raw = localStorage.getItem('closedSideBubbles'); if (!raw) return {}; return JSON.parse(raw) || {}; } catch(e){ return {}; }
+  }
+  function saveClosedBubbles(map) { try { localStorage.setItem('closedSideBubbles', JSON.stringify(map || {})); } catch(e){} }
+
+  // track bubbles the user intentionally kept open so they persist across reloads
+  // store as map { userId: { id, full_name, email, avatar_url, ts } }
+  function loadOpenBubbles() {
+    try { const raw = localStorage.getItem('openSideBubbles'); if (!raw) return {}; return JSON.parse(raw) || {}; } catch(e){ return {}; }
+  }
+  function saveOpenBubbles(map) { try { localStorage.setItem('openSideBubbles', JSON.stringify(map || {})); } catch(e){} }
+
+  function createSideBubble(owner) {
+    const closed = loadClosedBubbles();
+    console.debug('[debug] createSideBubble; owner.id=', owner.id, 'closedMap=', closed);
+    if (!sideContainer || !owner) return null;
+    const existing = sideContainer.querySelector(`[data-sender="${owner.id}"]`);
+    if (existing) { console.debug('[debug] createSideBubble existing element found for', owner.id); return existing; }
+    // use a DIV wrapper so the close button can be an interactive element inside
+    const btn = document.createElement('div');
+    btn.className = 'side-bubble';
+    btn.setAttribute('data-sender', owner.id);
+    btn.style.cursor = 'pointer';
+    btn.title = `Abrir chat con ${owner.full_name || owner.email || owner.id}`;
+    const img = document.createElement('img');
+    img.src = owner.avatar_url || '/imagen/default-avatar.png';
+    img.alt = owner.full_name || owner.email || owner.id;
+    btn.appendChild(img);
+    const badge = document.createElement('div'); badge.className = 'side-unread'; badge.style.display = 'none';
+    btn.appendChild(badge);
+    // close 'x' button to remove bubble permanently
+    const closeX = document.createElement('button');
+    closeX.className = 'side-close';
+    closeX.style.position = 'absolute'; closeX.style.top = '-8px'; closeX.style.right = '-8px'; closeX.style.background = 'rgba(0,0,0,0.6)'; closeX.style.color = '#fff'; closeX.style.border = '0'; closeX.style.borderRadius = '999px'; closeX.style.width = '22px'; closeX.style.height = '22px'; closeX.style.display = 'flex'; closeX.style.alignItems = 'center'; closeX.style.justifyContent = 'center'; closeX.style.fontSize = '12px'; closeX.style.cursor = 'pointer'; closeX.title = 'Cerrar burbuja';
+    closeX.textContent = '×';
+    closeX.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      try { btn.remove(); } catch(e){}
+      try {
+        // mark as closed so polling doesn't recreate it unless a newer message arrives
+        const closed = loadClosedBubbles(); closed[String(owner.id)] = Date.now(); saveClosedBubbles(closed);
+      } catch(e){}
+      try {
+        // remove from the open map when explicitly closed
+        const open = loadOpenBubbles(); if (open && open[String(owner.id)]) { delete open[String(owner.id)]; saveOpenBubbles(open); }
+      } catch(e){}
+    });
+    btn.appendChild(closeX);
+    btn.addEventListener('click', async () => {
+      console.debug('[debug] side bubble click handler start (owner.id=)', owner.id);
+      console.debug('[debug] side bubble clicked -> owner.id=', owner.id);
+      // close any mini-chat for the same user to avoid duplicates
+      try { closeMiniChat(owner.id); } catch(e){}
+      // mark active bubble and remove active from others
+      try { sideContainer.querySelectorAll('.side-bubble.active').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } catch(e){}
+      try {
+        // clicking a bubble means the user wants it open; save to openSideBubbles
+        const open = loadOpenBubbles(); open[String(owner.id)] = { id: owner.id, full_name: owner.full_name || owner.email || null, avatar_url: owner.avatar_url || null, ts: Date.now() }; saveOpenBubbles(open);
+        // if user had previously closed this bubble, remove that closed marker
+        const closed = loadClosedBubbles(); if (closed && closed[String(owner.id)]) { delete closed[String(owner.id)]; saveClosedBubbles(closed); }
+      } catch(e){}
+      // prefer the profile-panel chat if available (this is the same place 'Mensaje' on profile opens)
+      console.debug('[debug] opening chat from side bubble id=', owner.id);
+      try {
+        // Always open the global chat drawer with the conversation for this user.
+        // Using the global drawer ensures the same chat UI that shows messages from the profile 'Mensaje' button.
+        await openGlobalChat(owner.id, owner.full_name || owner.email || ('Usuario ' + owner.id));
+      } catch (e) {
+        console.warn('[debug] error opening global chat from side bubble', e);
+      }
+      console.debug('[debug] side bubble click handler done (owner.id=)', owner.id);
+      try { const ci = document.getElementById('chatInput'); if (ci) { ci.focus(); } } catch(e){}
+    });
+    // add to container
+    sideContainer.appendChild(btn);
+    // persist this bubble as open so it survives page reloads
+    try { const open = loadOpenBubbles(); open[String(owner.id)] = { id: owner.id, full_name: owner.full_name || owner.email || null, avatar_url: owner.avatar_url || null, ts: Date.now() }; saveOpenBubbles(open); } catch(e){}
+    return btn;
+  }
+
+  function updateSideBubbleCount(userId, count) {
+    if (!sideContainer) return;
+    const el = sideContainer.querySelector(`[data-sender="${userId}"]`);
+    if (!el) return;
+    const badge = el.querySelector('.side-unread');
+    if (!badge) return;
+    if (count && count > 0) {
+      badge.textContent = String(count);
+      badge.style.display = 'block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  async function refreshSideBubbles() {
+    if (!sideContainer) return;
+    try {
+      console.debug('[debug] refreshSideBubbles -> fetching inbox');
+      // reuse inbox endpoint which returns grouped senders with unread counts
+      const res = await fetch(`${API_BASE}/api/messages/inbox`, { credentials: 'include' });
+      console.debug('[debug] refreshSideBubbles -> inbox status', res.status);
+      if (!res.ok) return;
+      const j = await res.json().catch(()=>null);
+      console.debug('[debug] refreshSideBubbles -> inbox payload', j && (j.data || []).map(r=>({sender: r.sender_id, unread: r.unread})) );
+      const rows = (j && j.data) ? (j.data || []) : [];
+      // First, ensure all bubbles the user previously opened persist across reloads
+      try {
+        const open = loadOpenBubbles();
+        Object.keys(open || {}).forEach(k => {
+          try {
+            const owner = open[k];
+            if (!owner) return;
+            // owner may be minimal; create bubble using stored info
+            const dummy = { id: owner.id, full_name: owner.full_name, email: owner.email, avatar_url: owner.avatar_url };
+            const el = createSideBubble(dummy);
+            // if we stored an unread count earlier it will be patched when inbox rows are processed
+            if (el) updateSideBubbleCount(owner.id, 0);
+          } catch(e){}
+        });
+      } catch(e){}
+
+      // for each sender with unread > 0 ensure a side bubble exists and show count
+      rows.forEach(r => {
+        if (!r || !(r.unread && r.unread > 0)) return; // only show bubbles for senders with unread messages
+        const u = (r && r.user) ? r.user : { id: r.sender_id };
+        if (!u || !r) return;
+        console.debug('[debug] refreshSideBubbles row:', u.id, 'unread=', r.unread);
+        // create or update (keep bubbles persistent). If user previously closed the bubble
+        // only recreate it when there is a newer message after the close timestamp.
+        try {
+          const closed = loadClosedBubbles();
+          const lastMsg = (r && r.last_message && r.last_message.created_at) ? new Date(r.last_message.created_at).getTime() : 0;
+          const closedTs = closed[String(u.id)] || 0;
+          // If the owner is currently manually opened by user, skip closed logic — keep it
+          const openMap = loadOpenBubbles();
+          const isManuallyOpen = !!(openMap && openMap[String(u.id)]);
+          if (!isManuallyOpen && closedTs && lastMsg && lastMsg <= closedTs) {
+            // user closed after last message, don't recreate; but update badge if element exists
+            const existing = sideContainer.querySelector(`[data-sender="${u.id}"]`);
+            if (existing) updateSideBubbleCount(u.id, r.unread || 0);
+            return;
+          }
+          const el = createSideBubble(u);
+          if (!el) return; // creation prevented
+          updateSideBubbleCount(u.id, r.unread || 0);
+          // make sure it's persisted as open so it survives reloads
+          try { const open = loadOpenBubbles(); open[String(u.id)] = { id: u.id, full_name: u.full_name, avatar_url: u.avatar_url, ts: Date.now() }; saveOpenBubbles(open); } catch(e){}
+        } catch (ex) { console.error('refreshSideBubbles closed-check error', ex); }
+      });
+    } catch (e) { console.error('refreshSideBubbles error', e); }
+  }
+
+  function startSideBubblesPoll() { try { stopSideBubblesPoll(); refreshSideBubbles(); sideBubblesPoll = setInterval(() => { try { refreshSideBubbles(); } catch(e){} }, 7000); } catch(e){} }
+  function stopSideBubblesPoll() { try { if (sideBubblesPoll) { clearInterval(sideBubblesPoll); sideBubblesPoll = null; } } catch(e){} }
+
+  // start polling immediately (so the UI shows bubbles when messages exist)
+  try { startSideBubblesPoll(); } catch(e) { /* ignore */ }
 
   // ---- Global bottom chat drawer (used from panel inbox) ----
   let gpoll = null;
@@ -908,10 +1215,12 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadGConversation(withId) {
     if (!withId) return;
     try {
+      console.debug('[debug] loadGConversation called with id=', withId);
       const res = await fetch(`${API_BASE}/api/messages/conversation/${withId}`, { credentials: 'include' });
       if (!res.ok) return;
       const j = await res.json();
       const msgs = j.data || [];
+      console.debug('[debug] loadGConversation returned', msgs.length, 'messages for id=', withId);
       renderGMessages(msgs);
     } catch (e) { console.error('loadGConversation', e); }
   }
@@ -919,12 +1228,18 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openGlobalChat(withId, title) {
     if (!window.currentUserId) { alert('Necesitas iniciar sesión para enviar mensajes'); return; }
     if (!gchatDrawer) return;
+    // hide any mini-chat windows and profile popover so the global drawer is clearly visible
+    try { if (miniChatContainer) miniChatContainer.style.display = 'none'; } catch(e){}
+    try { if (profilePanel) { profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true'); profilePanel.style.display = 'none'; profilePanel.style.visibility = 'hidden'; } } catch(e){}
+    try { const pc = document.getElementById('panelChat'); if (pc) { pc.style.display = 'none'; pc.style.visibility = 'hidden'; } } catch(e){}
+    // make sure the global drawer is on top so it's clearly visible
+    try { if (gchatDrawer) { gchatDrawer.style.zIndex = '999999'; } } catch(e){}
     // set title
     if (gchatTitle) gchatTitle.textContent = title || 'Chat';
     gchatDrawer.style.display = 'flex';
     // load and start polling
     await loadGConversation(withId);
-    try { await refreshPanelInbox(); await refreshUnreadBadge(); } catch(e){}
+    try { await refreshPanelBubbles(); await refreshUnreadBadge(); } catch(e){}
     stopGPoll(); gpoll = setInterval(()=> loadGConversation(withId), 2500);
     // attach send
     if (gchatSend) {
@@ -940,12 +1255,133 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
     if (gchatInput) gchatInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (gchatSend) gchatSend.click(); } };
-    if (gchatClose) gchatClose.onclick = () => { gchatDrawer.style.display = 'none'; stopGPoll(); };
+    if (gchatClose) gchatClose.onclick = () => { gchatDrawer.style.display = 'none'; stopGPoll(); try { if (miniChatContainer) miniChatContainer.style.display = 'flex'; } catch(e){} try { if (sideContainer) sideContainer.querySelectorAll('.side-bubble.active').forEach(b=>b.classList.remove('active')); } catch(e){} };
   }
 
   function stopGPoll(){ if (gpoll) { clearInterval(gpoll); gpoll = null; } }
 
   // ---- Lightbox / view modal ----
+
+  // ---- Mini chat windows (Facebook-like) ----
+  const miniChatContainer = (() => {
+    let el = document.getElementById('miniChatContainer');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'miniChatContainer';
+      el.style.position = 'fixed';
+      el.style.right = '16px';
+      el.style.bottom = '16px';
+      el.style.display = 'flex';
+      el.style.gap = '8px';
+      el.style.alignItems = 'flex-end';
+      el.style.zIndex = 99999;
+      document.body.appendChild(el);
+    }
+    return el;
+  })();
+
+  const miniChats = {}; // keyed by userId
+
+  async function openMiniChat(withId, title, avatarUrl) {
+    if (!withId) return;
+    const sid = String(withId);
+    // if exists, bring to front
+    if (miniChats[sid] && miniChats[sid].el) {
+      miniChats[sid].el.style.display = 'flex';
+      // refresh messages
+      await loadMiniConversation(withId);
+      return;
+    }
+
+    // create element
+    const el = document.createElement('div');
+    el.className = 'mini-chat';
+    el.setAttribute('data-sender', sid);
+    el.style.display = 'flex';
+    el.style.flexDirection = 'column';
+    el.style.width = '320px';
+    el.style.maxWidth = 'calc(100vw - 40px)';
+    el.style.height = '380px';
+    el.style.background = 'var(--bg)';
+    el.style.color = 'var(--text)';
+    el.style.borderRadius = '12px';
+    el.style.boxShadow = '0 16px 56px rgba(0,0,0,0.3)';
+    el.style.overflow = 'hidden';
+
+    const header = document.createElement('div');
+    header.className = 'mini-chat-header';
+    header.style.display = 'flex'; header.style.alignItems = 'center'; header.style.justifyContent = 'space-between'; header.style.padding = '8px'; header.style.borderBottom = '1px solid rgba(0,0,0,0.06)';
+    const left = document.createElement('div'); left.style.display = 'flex'; left.style.alignItems = 'center'; left.style.gap = '8px';
+    const aimg = document.createElement('img'); aimg.src = avatarUrl || '/imagen/default-avatar.png'; aimg.style.width='32px'; aimg.style.height='32px'; aimg.style.borderRadius='999px'; aimg.style.objectFit='cover'; aimg.style.border='2px solid rgba(255,255,255,0.6)';
+    const nameEl = document.createElement('div'); nameEl.style.fontWeight='700'; nameEl.style.fontSize='13px'; nameEl.textContent = title || ('Usuario ' + sid);
+    left.appendChild(aimg); left.appendChild(nameEl);
+
+    const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px';
+    const minimizeBtn = document.createElement('button'); minimizeBtn.className='btn'; minimizeBtn.textContent='—'; minimizeBtn.title='Minimizar'; minimizeBtn.style.padding='6px'; minimizeBtn.onclick = () => { el.style.display = 'none'; };
+    const closeBtn = document.createElement('button'); closeBtn.className='btn'; closeBtn.textContent='×'; closeBtn.title='Cerrar'; closeBtn.style.padding='6px'; closeBtn.onclick = () => { closeMiniChat(sid); };
+    right.appendChild(minimizeBtn); right.appendChild(closeBtn);
+
+    header.appendChild(left); header.appendChild(right);
+
+    const body = document.createElement('div'); body.className='mini-chat-body'; body.style.flex='1'; body.style.padding='8px'; body.style.overflow='auto'; body.style.display='flex'; body.style.flexDirection='column'; body.style.gap='8px';
+
+    const inputBar = document.createElement('div'); inputBar.style.display='flex'; inputBar.style.gap='8px'; inputBar.style.padding='8px'; inputBar.style.borderTop='1px solid rgba(0,0,0,0.06)';
+    const input = document.createElement('input'); input.type='text'; input.placeholder='Escribe un mensaje...'; input.style.flex='1'; input.style.padding='8px'; input.style.border='1px solid var(--border)'; input.style.borderRadius='8px'; input.style.background='transparent'; input.style.color='inherit';
+    const send = document.createElement('button'); send.className='btn btn-primary'; send.textContent='Enviar'; send.style.flex='0 0 auto';
+    inputBar.appendChild(input); inputBar.appendChild(send);
+
+    el.appendChild(header); el.appendChild(body); el.appendChild(inputBar);
+    miniChatContainer.appendChild(el);
+
+    // register chat
+    miniChats[sid] = { el, body, input, send, poll: null };
+
+    // wire send
+    send.onclick = async () => { const txt = input.value && input.value.trim(); if (!txt) return; try { const res = await fetch(`${API_BASE}/api/messages/send`, { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: withId, content: txt }) }); if (!res.ok) { const j = await res.json().catch(()=>null); alert((j&&j.error)?j.error:'Error enviando'); return; } input.value=''; await loadMiniConversation(withId); await refreshPanelBubbles(); await refreshUnreadBadge(); } catch(e){ console.error('mini send error', e); } };
+    input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send.click(); } };
+
+    // load conversation and start polling
+    await loadMiniConversation(withId);
+    startMiniPoll(withId);
+  }
+
+  function closeMiniChat(id) {
+    const sid = String(id);
+    const c = miniChats[sid];
+    if (!c) return;
+    try { if (c.poll) clearInterval(c.poll); } catch(e){}
+    try { c.el.remove(); } catch(e){}
+    delete miniChats[sid];
+  }
+
+  async function loadMiniConversation(withId) {
+    const sid = String(withId);
+    const c = miniChats[sid];
+    if (!c) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/messages/conversation/${withId}`, { credentials: 'include' });
+      if (!res.ok) return;
+      const j = await res.json();
+      const msgs = j.data || [];
+      // render messages
+      c.body.innerHTML = '';
+      msgs.forEach(m => {
+        const me = String(m.sender_id) === String(window.currentUserId || '');
+        const mEl = document.createElement('div');
+        mEl.style.display='flex'; mEl.style.justifyContent = me ? 'flex-end' : 'flex-start';
+        mEl.innerHTML = `<div style="max-width:78%;padding:8px;border-radius:8px;background:${me ? 'linear-gradient(90deg,#0ea5a0,#06b6d4)' : 'rgba(0,0,0,0.06)'};color:${me ? '#fff':'var(--text)'}">${escapeHtml(m.content)}<div style=\"font-size:10px;margin-top:6px;opacity:0.7;text-align:right\">${(new Date(m.created_at)).toLocaleString()}</div></div>`;
+        c.body.appendChild(mEl);
+      });
+      c.body.scrollTop = c.body.scrollHeight;
+    } catch (e) { console.error('loadMiniConversation error', e); }
+  }
+
+  function startMiniPoll(withId) {
+    const sid = String(withId);
+    const c = miniChats[sid];
+    if (!c) return;
+    try { if (c.poll) clearInterval(c.poll); c.poll = setInterval(() => loadMiniConversation(withId), 2500); } catch (e) { console.error('startMiniPoll error', e); }
+  }
   const viewModal = document.getElementById('viewModal');
   const viewImage = document.getElementById('viewImage');
   const viewVideo = document.getElementById('viewVideo');

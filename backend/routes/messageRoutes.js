@@ -55,7 +55,10 @@ export default function(supabase, sessionSecret) {
       if (!me) return res.status(401).json({ error: 'Not authenticated' });
       const other = Number(req.params.id);
       if (!other) return res.status(400).json({ error: 'Invalid id' });
+      console.debug(`[messages] conversation request: me=${me} other=${other}`);
+      const start = Date.now();
       const { data, error } = await getConversation(me, other, { limit: 1000 });
+      console.debug(`[messages] conversation result: me=${me} other=${other} rows=${(data||[]).length} duration=${Date.now()-start}ms`);
       if (error) return res.status(500).json({ error: error.message || error });
       // marcar mensajes recibidos como leídos
       await markMessagesRead(me, other);

@@ -232,10 +232,9 @@
     <textarea id="profileDescription" rows="4" placeholder="Escribe algo sobre ti..."></textarea>
     
     <hr style="margin:12px 0; border:none; border-top:1px solid var(--border);" />
-    <h4 style="margin:0 0 6px 0;">Bandeja de mensajes</h4>
-    <div id="panelInbox" style="max-height:220px;overflow:auto;margin-bottom:6px;padding:6px;border-radius:8px;background:rgba(0,0,0,0.03);">
-      <div class="muted" id="panelInboxEmpty">Cargando mensajes...</div>
-    </div>
+    <!-- removed old 'Bandeja de mensajes' headline - replaced by compact bubbles above -->
+    <!-- Replaced the old 'bandeja' with compact chat bubbles that open the global chat drawer -->
+    <div id="panelInboxBubbles" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;padding:6px;border-radius:8px;background:rgba(0,0,0,0.03)"></div>
 
     <!-- Area de chat dentro del panel: oculto por defecto, se muestra al abrir una conversación -->
     <div id="panelChat" style="display:none;margin-top:8px;border-radius:8px;padding:8px;background:rgba(0,0,0,0.02);max-height:280px;overflow:hidden;">
@@ -272,6 +271,9 @@
       <button id="chatSend" class="btn btn-primary">Enviar</button>
     </div>
   </div>
+
+  <!-- Floating side bubbles for incoming chats (created dynamically by app.js) -->
+  <div id="sideChatBubbles" style="position:fixed;right:12px;top:40%;display:flex;flex-direction:column;gap:10px;z-index:99999;pointer-events:auto"></div>
 
   <!-- Music manager modal -->
   <div id="musicModal" class="modal hidden" aria-hidden="true">

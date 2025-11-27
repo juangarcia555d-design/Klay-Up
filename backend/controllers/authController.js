@@ -288,3 +288,39 @@ export function uploadProfilePhotosHandler(supabase, sessionSecret) {
     }
   };
 }
+
+// Actualizar avatar del usuario autenticado (archivo o default_avatar)
+export function updateAvatarHandler(supabase, sessionSecret) {
+  return async (req, res) => {
+    try {
+      const token = req.cookies?.session_token || null;
+      if (!token) return res.status(401).json({ error: 'No autenticado' });
+      let payload;
+      try { payload = jwt.verify(token, sessionSecret); } catch (e) { return res.status(401).json({ error: 'Token inválido' }); }
+      const userId = payload?.userId;
+      if (!userId) return res.status(401).json({ error: 'Token inválido' });
+
+      let avatarUrl = null;
+      if (req.body && req.body.default_avatar) {
+        avatarUrl = String(req.body.default_avatar).trim();
+      }
+      if (req.file && req.file.buffer) {
+        const key = `${Date.now()}-${req.file.originalname}`;
+        const { error: upErr } = await supabase.storage.from('avatars').upload(key, req.file.buffer, { contentType: req.file.mimetype });
+        if (upErr) console.warn('Error subiendo avatar:', upErr.message || upErr);
+        else {
+          const { data: urlData } = await supabase.storage.from('avatars').getPublicUrl(key);
+          avatarUrl = urlData?.publicUrl || avatarUrl;
+          if (avatarUrl && avatarUrl.includes('/avatars/avatars/')) avatarUrl = avatarUrl.replace('/avatars/avatars/', '/avatars/');
+        }
+      }
+
+      if (!avatarUrl) return res.status(400).json({ error: 'avatar requerido' });
+
+      const { data, error } = await supabase.from('usuarios').update({ avatar_url: avatarUrl }).eq('id', userId).select().maybeSingle();
+      if (error) return res.status(500).json({ error: error.message || 'Error actualizando avatar' });
+      try { setSessionCookie(res, { userId: data.id, email: payload.email }, sessionSecret); } catch (e) {}
+      return res.json({ ok: true, avatar: data.avatar_url || avatarUrl });
+    } catch (e) { console.error('updateAvatarHandler', e); return res.status(500).json({ error: 'Error interno' }); }
+  };
+}

@@ -92,6 +92,24 @@
         <button id="chatClose" class="btn">Cerrar</button>
       </div>
     </div>
+
+    <!-- Avatar picker modal -->
+    <div id="avatarPickerModal" style="display:none;position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:100000"> 
+      <div style="max-width:680px;width:94%;background:var(--bg);color:var(--text);padding:12px;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong>Seleccionar avatar</strong>
+          <button id="closeAvatarPicker" class="btn">Cerrar</button>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;max-height:48vh;overflow:auto;padding:6px" id="avatarList">Loading avatars...</div>
+        <hr style="margin:10px 0" />
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-weight:600">Subir avatar</label>
+          <input id="avatarFile" type="file" accept="image/*" />
+          <button id="avatarUploadBtn" class="btn btn-primary">Subir</button>
+          <div id="avatarUploadProgress" style="flex:1;display:none;margin-left:8px;height:8px;background:rgba(0,0,0,0.06);border-radius:8px;overflow:hidden"><div style="height:100%;width:0%;background:linear-gradient(90deg,#6b46c1,#7c3aed);transition:width 120ms linear"></div></div>
+        </div>
+      </div>
+    </div>
     <div id="chatBody" style="padding:8px;max-height:320px;overflow:auto;background:transparent;display:flex;flex-direction:column;gap:8px"></div>
     <div style="padding:8px;border-top:1px solid rgba(0,0,0,0.06);display:flex;gap:8px;align-items:center">
       <input id="chatInput" placeholder="Escribe un mensaje..." style="flex:1;padding:8px;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:transparent;color:inherit" />
@@ -271,6 +289,81 @@
   </script>
   <script>
     (function(){
+      // avatar picker handlers
+      const profileAvatar = document.getElementById('profileFullAvatar');
+      const picker = document.getElementById('avatarPickerModal');
+      const closePicker = document.getElementById('closeAvatarPicker');
+      const avatarList = document.getElementById('avatarList');
+      const avatarFile = document.getElementById('avatarFile');
+      const uploadBtn = document.getElementById('avatarUploadBtn');
+      const uploadProgressWrap = document.getElementById('avatarUploadProgress');
+
+      async function loadAvatarOptions() {
+        try {
+          avatarList.innerHTML = 'Cargando...';
+          const res = await fetch('/api/avatars');
+          if (!res.ok) throw new Error('No hay avatares');
+          const j = await res.json();
+          const files = j && j.data ? (j.data || []) : [];
+          if (!files || !files.length) { avatarList.innerHTML = '<div class="muted">No hay avatares disponibles</div>'; return; }
+          avatarList.innerHTML = '';
+          files.forEach(f => {
+            const url = '/imagen/avatares/' + f;
+            const el = document.createElement('div'); el.style.padding='6px'; el.style.cursor='pointer'; el.style.width='72px'; el.style.height='72px'; el.style.display='flex'; el.style.justifyContent='center'; el.style.alignItems='center'; el.style.borderRadius='8px'; el.style.border='1px solid rgba(0,0,0,0.06)';
+            const img = document.createElement('img'); img.src = url; img.style.maxWidth='64px'; img.style.maxHeight='64px'; img.style.borderRadius='50%'; el.appendChild(img);
+            el.addEventListener('click', async ()=>{
+              try {
+                const res2 = await fetch('/auth/profile/avatar', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ default_avatar: url }) });
+                if (!res2.ok) { const jj = await res2.json().catch(()=>null); alert((jj && jj.error) ? jj.error : 'Error actualizando avatar'); return; }
+                const j2 = await res2.json();
+                profileAvatar.src = j2.avatar || url;
+                alert('Avatar actualizado');
+                picker.style.display = 'none';
+              } catch (e) { console.error('avatar select error', e); alert('Error actualizando avatar'); }
+            });
+            avatarList.appendChild(el);
+          });
+        } catch (e) { console.warn('No se pudieron cargar avatares', e); avatarList.innerHTML = '<div class="muted">No se pudieron cargar avatares.</div>'; }
+      }
+
+      if (profileAvatar) {
+        profileAvatar.style.cursor = 'pointer';
+        profileAvatar.addEventListener('click', async (ev)=>{ ev.preventDefault(); try { picker.style.display = 'flex'; await loadAvatarOptions(); } catch(e){} });
+      }
+      if (closePicker) closePicker.addEventListener('click', ()=>{ picker.style.display = 'none'; });
+
+      if (uploadBtn) {
+        uploadBtn.addEventListener('click', async ()=>{
+          const f = avatarFile && avatarFile.files && avatarFile.files[0];
+          if (!f) { alert('Selecciona un archivo primero'); return; }
+          try {
+            uploadProgressWrap.style.display = 'block';
+            uploadProgressWrap.querySelector('div').style.width = '0%';
+            const fd = new FormData(); fd.append('avatar', f);
+            const xhr = new XMLHttpRequest(); xhr.open('POST', '/auth/profile/avatar'); xhr.withCredentials = true;
+            xhr.upload.onprogress = (ev) => { if (ev.lengthComputable) uploadProgressWrap.querySelector('div').style.width = Math.round((ev.loaded/ev.total)*100) + '%'; };
+            xhr.onload = async () => {
+              try {
+                if (xhr.status >=200 && xhr.status < 300) {
+                  const j = JSON.parse(xhr.responseText || '{}') || {};
+                  profileAvatar.src = j.avatar || profileAvatar.src;
+                  alert('Avatar actualizado'); picker.style.display = 'none';
+                } else {
+                  const j = JSON.parse(xhr.responseText || '{}') || {};
+                  alert((j && j.error) ? j.error : 'Error subiendo avatar');
+                }
+              } catch (e) { console.error(e); alert('Error procesando respuesta'); }
+              uploadProgressWrap.style.display='none';
+            };
+            xhr.onerror = ()=>{ alert('Error subiendo avatar'); uploadProgressWrap.style.display='none'; };
+            xhr.send(fd);
+          } catch (err) { console.error('upload avatar error', err); alert('Error subiendo'); uploadProgressWrap.style.display='none'; }
+        });
+      }
+    })();
+  </script>
+  <script>
+    (function(){
       try {
         const color = "<%= initialTheme %>" || '#ffffff';
         function hexToRgb(hex) {
@@ -308,13 +401,24 @@
           e.preventDefault();
           const fd = new FormData(form);
           try {
-            const res = await fetch('/auth/profile/photos', { method: 'POST', credentials: 'include', body: fd });
-            if (!res.ok) {
-              const j = await res.json().catch(()=>null); alert((j&&j.error)?j.error:'Error'); return;
-            }
-            alert('Subido correctamente');
-            // Recargar la página para mostrar la nueva foto (simplifica render server-side)
-            window.location.reload();
+            // Use XHR for progress events
+            const progressWrap = document.createElement('div'); progressWrap.style.marginTop='8px'; progressWrap.style.height='8px'; progressWrap.style.background='rgba(0,0,0,0.06)'; progressWrap.style.borderRadius='8px'; progressWrap.style.overflow='hidden';
+            const inner = document.createElement('div'); inner.style.height='100%'; inner.style.width='0%'; inner.style.background='linear-gradient(90deg,#6b46c1,#7c3aed)'; inner.style.transition='width 120ms linear'; progressWrap.appendChild(inner);
+            form.appendChild(progressWrap);
+
+            const xhr = new XMLHttpRequest(); xhr.open('POST', '/auth/profile/photos'); xhr.withCredentials = true;
+            xhr.upload.onprogress = (ev) => { if (ev.lengthComputable) inner.style.width = Math.round((ev.loaded/ev.total)*100) + '%'; };
+            xhr.onload = () => {
+              try {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  alert('Subido correctamente'); window.location.reload();
+                } else {
+                  const j = JSON.parse(xhr.responseText || '{}') || {}; alert((j && j.error)?j.error:'Error');
+                }
+              } catch (e) { alert('Error procesando la respuesta: ' + (e && e.message ? e.message : e)); }
+            };
+            xhr.onerror = () => { alert('Error subiendo el archivo'); };
+            xhr.send(fd);
           } catch (err) { alert('Error subiendo: '+(err.message||err)); }
         });
       }

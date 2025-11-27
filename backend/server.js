@@ -201,6 +201,16 @@ app.get('/register', async (req, res) => {
   }
 });
 
+// API para listar avatares locales (frontend/imagen/avatares)
+app.get('/api/avatars', async (req, res) => {
+  try {
+    const avatarsDir = path.join(__dirname, '../frontend/imagen/avatares');
+    const files = await fs.readdir(avatarsDir).catch(()=>[]);
+    const filtered = (files || []).filter(f => /\.(png|jpe?g|gif|webp|svg)$/i.test(f));
+    return res.json({ data: filtered });
+  } catch (e) { console.warn('api/avatars error', e && e.message); return res.json({ data: [] }); }
+});
+
 // Mount auth routes (server-side register/login/logout)
 app.use('/auth', createAuthRoutes(supabase, SESSION_SECRET));
 

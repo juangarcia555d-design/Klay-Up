@@ -64,7 +64,7 @@ export async function getConversation(userIdA, userIdB, opts = { limit: 200 }) {
   const { data, error } = await supabase
     .from('messages')
     .select('id, sender_id, receiver_id, content, "read", created_at')
-    .or(`and(sender_id.eq.${userIdA},receiver_id.eq.${userIdB}),and(sender_id.eq.${userIdB},receiver_id.eq.${userIdA}))`)
+    .or(`and(sender_id.eq.${userIdA},receiver_id.eq.${userIdB}),and(sender_id.eq.${userIdB},receiver_id.eq.${userIdA})`)
     .order('created_at', { ascending: true })
     .limit(limit);
   return { data, error };

@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { uploadMiddleware, registerHandler, loginHandler, logoutHandler, meHandler, updateThemeHandler, updateProfileHandler, deleteProfileHandler, uploadProfilePhotosHandler } from '../controllers/authController.js';
+import { uploadMiddleware, registerHandler, loginHandler, logoutHandler, meHandler, updateThemeHandler, updateProfileHandler, deleteProfileHandler, uploadProfilePhotosHandler, updateAvatarHandler } from '../controllers/authController.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
 
@@ -22,5 +22,7 @@ export default function(supabase, sessionSecret) {
   router.delete('/profile', deleteProfileHandler(supabase, sessionSecret));
   // subir fotos al perfil (multipart, protected)
   router.post('/profile/photos', upload.array('file', 12), uploadProfilePhotosHandler(supabase, sessionSecret));
+  // actualizar avatar del perfil (multipart con campo 'avatar' o default_avatar en body)
+  router.post('/profile/avatar', upload.single('avatar'), updateAvatarHandler(supabase, sessionSecret));
   return router;
 }
