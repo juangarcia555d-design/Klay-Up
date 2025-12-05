@@ -7,8 +7,14 @@ import {
   deletePhoto,
   uploadFile,
   getPublicUrl,
-  removeFile
+  removeFile,
+  addReaction,
+  removeReaction,
+  getReactions,
+  getUserReaction
 } from '../models/photoModel.js';
+
+import jwt from 'jsonwebtoken';
 
 // 📸 Listar fotos
 export async function listPhotos(req, res) {
@@ -19,9 +25,21 @@ export async function listPhotos(req, res) {
     if (category) {
       // Sólo devolver fotos públicas cuando es una petición pública de galería
       try {
-        const { data, error } = await getPhotos(category).eq('is_public', true);
-        if (error) return res.status(500).json({ error: error.message });
-        return res.json(data);
+          const { data, error } = await getPhotos(category).eq('is_public', true);
+          if (error) return res.status(500).json({ error: error.message });
+          const photos = data || [];
+          const userIds = Array.from(new Set(photos.filter(p => p.user_id).map(p => p.user_id)));
+          let usersMap = {};
+          if (userIds.length) {
+            const { data: users } = await supabase.from('usuarios').select('id,full_name,avatar_url').in('id', userIds);
+            usersMap = (users || []).reduce((acc, u) => { acc[String(u.id)] = u; return acc; }, {});
+          }
+          const enhanced = await Promise.all(photos.map(async (p) => {
+            const r = await getReactions(p.id);
+            const uploader = p.user_id ? usersMap[String(p.user_id)] : null;
+            return { ...p, uploader, reactions: { likes: r.count_like || 0, dislikes: r.count_dislike || 0 } };
+          }));
+          return res.json(enhanced);
       } catch (e) {
         // Si la columna is_public no existe en la DB, caeremos a una regla segura: devolver solo filas *sin* user_id (públicas)
         try {
@@ -36,33 +54,136 @@ export async function listPhotos(req, res) {
 
     // No hay categoría -> excluir VIDEO
     try {
-      const { data, error } = await supabase
-        .from('photos')
-        .select('id, title, description, date_taken, category, url')
-        .neq('category', 'VIDEO')
-        .eq('is_public', true)
-        .order('created_at', { ascending: false });
-      if (error) return res.status(500).json({ error: error.message });
-      return res.json(data);
+        const { data, error } = await supabase
+          .from('photos')
+          .select('id, title, description, date_taken, category, url, user_id')
+          .neq('category', 'VIDEO')
+          .eq('is_public', true)
+          .order('created_at', { ascending: false });
+        if (error) return res.status(500).json({ error: error.message });
+        // Añadir información del uploader y conteos de reacciones
+        const photos = data || [];
+        // recolectar user_ids únicos
+        const userIds = Array.from(new Set(photos.filter(p => p.user_id).map(p => p.user_id)));
+        let usersMap = {};
+        if (userIds.length) {
+          const { data: users } = await supabase.from('usuarios').select('id,full_name,avatar_url').in('id', userIds);
+          usersMap = (users || []).reduce((acc, u) => { acc[String(u.id)] = u; return acc; }, {});
+        }
+        // obtener reacciones para cada foto (conteos)
+        const enhanced = await Promise.all(photos.map(async (p) => {
+          const r = await getReactions(p.id);
+          const uploader = p.user_id ? usersMap[String(p.user_id)] : null;
+          return { ...p, uploader, reactions: { likes: r.count_like || 0, dislikes: r.count_dislike || 0 } };
+        }));
+        return res.json(enhanced);
     } catch (e) {
       // fallback si is_public no existe: asumimos que las fotos con user_id son uploads de perfil y no deben mostrarse
       try {
         const { data, error } = await supabase
           .from('photos')
-          .select('id, title, description, date_taken, category, url')
+          .select('id, title, description, date_taken, category, url, user_id')
           .neq('category', 'VIDEO')
           .is('user_id', null)
           .order('created_at', { ascending: false });
         if (error) return res.status(500).json({ error: error.message });
-        return res.json(data);
+        const photos = data || [];
+        const enhanced = await Promise.all(photos.map(async (p) => {
+          const r = await getReactions(p.id);
+          return { ...p, uploader: null, reactions: { likes: r.count_like || 0, dislikes: r.count_dislike || 0 } };
+        }));
+        return res.json(enhanced);
       } catch (e2) {
         return res.status(500).json({ error: e2.message || 'Error interno' });
       }
     }
     if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    // attach reactions
+    const photos = data || [];
+    const enhanced = await Promise.all(photos.map(async (p) => {
+      const r = await getReactions(p.id);
+      return { ...p, reactions: { likes: r.count_like || 0, dislikes: r.count_dislike || 0 } };
+    }));
+    res.json(enhanced);
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+}
+
+// POST /api/photos/:id/reaction  -> body: { reaction: 'like'|'dislike' }
+export async function reactPhoto(req, res) {
+  try {
+    const token = req.cookies?.session_token || null;
+    const secret = process.env.SESSION_SECRET || 'change_this_in_production';
+    if (!token) return res.status(401).json({ error: 'No autenticado' });
+    let payload;
+    try { payload = jwt.verify(token, secret); } catch (e) { return res.status(401).json({ error: 'Token inválido' }); }
+    const userId = payload?.userId;
+    if (!userId) return res.status(401).json({ error: 'No autenticado' });
+    const photoId = Number(req.params.id);
+    const { reaction } = req.body || {};
+    if (!['like', 'dislike'].includes(reaction)) return res.status(400).json({ error: 'Reacción inválida' });
+    const { data, error } = await addReaction(photoId, userId, reaction);
+    if (error) {
+      const msg = String(error.message || error);
+      if (/photo_reactions/i.test(msg) || /does not exist|relation ".*photo_reactions" does not exist|undefined_table/i.test(msg)) {
+        return res.status(500).json({ error: 'Tabla photo_reactions no encontrada en la base de datos. Ejecuta la migración add_photo_reactions.sql en Supabase.' });
+      }
+      return res.status(500).json({ error: msg });
+    }
+    return res.json({ ok: true, reaction: data });
+  } catch (e) { console.error('reactPhoto error', e); return res.status(500).json({ error: e.message || 'Error interno' }); }
+}
+
+// DELETE /api/photos/:id/reaction  -> quita la reacción del usuario autenticado
+export async function unreactPhoto(req, res) {
+  try {
+    const token = req.cookies?.session_token || null;
+    const secret = process.env.SESSION_SECRET || 'change_this_in_production';
+    if (!token) return res.status(401).json({ error: 'No autenticado' });
+    let payload;
+    try { payload = jwt.verify(token, secret); } catch (e) { return res.status(401).json({ error: 'Token inválido' }); }
+    const userId = payload?.userId;
+    if (!userId) return res.status(401).json({ error: 'No autenticado' });
+    const photoId = Number(req.params.id);
+    const { error } = await removeReaction(photoId, userId);
+    if (error) return res.status(500).json({ error: error.message || error });
+    return res.json({ ok: true });
+  } catch (e) { console.error('unreactPhoto error', e); return res.status(500).json({ error: e.message || 'Error interno' }); }
+}
+
+// GET /api/photos/:id/reactions -> devuelve listas de usuarios que dieron like/dislike
+export async function getPhotoReactions(req, res) {
+  try {
+    const photoId = Number(req.params.id);
+    const r = await getReactions(photoId);
+    if (r.error) return res.status(500).json({ error: r.error.message || r.error });
+    // traer información de usuarios (avatar, full_name)
+    const userIds = Array.from(new Set([...(r.likes || []), ...(r.dislikes || [])]));
+    let users = [];
+    if (userIds.length) {
+      const { data, error } = await supabase.from('usuarios').select('id,full_name,avatar_url').in('id', userIds);
+      if (error) return res.status(500).json({ error: error.message || error });
+      users = data || [];
+    }
+    const usersById = (users || []).reduce((acc, u) => { acc[String(u.id)] = u; return acc; }, {});
+    const likes = (r.likes || []).map(id => usersById[String(id)] || { id });
+    const dislikes = (r.dislikes || []).map(id => usersById[String(id)] || { id });
+    return res.json({ likes, dislikes, count_like: r.count_like || 0, count_dislike: r.count_dislike || 0 });
+  } catch (e) { console.error('getPhotoReactions error', e); return res.status(500).json({ error: e.message || 'Error interno' }); }
+}
+
+// GET /api/photos/reactions/check -> comprobar si la tabla photo_reactions existe y es accesible
+export async function checkReactionsTable(req, res) {
+  try {
+    const { data, error } = await supabase.from('photo_reactions').select('id').limit(1);
+    if (error) {
+      const msg = String(error.message || error);
+      return res.status(500).json({ ok: false, error: msg });
+    }
+    return res.json({ ok: true, rows: (data || []).length });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e && (e.message || e)) });
   }
 }
 
@@ -103,16 +224,29 @@ export async function addPhoto(req, res) {
       // Obtener URL pública
       const url = getPublicUrl(path);
 
-      // Payload para la fila en la tabla
-      const payload = {
-        title,
-        description,
-        date_taken,
-        // Si el archivo es un video, forzamos la categoría VIDEO para que sólo se muestre en esa sección
-        category: file.mimetype && file.mimetype.startsWith('video/') ? 'VIDEO' : (category || 'GALERIA'),
-        url,
-        is_public: true
-      };
+        // Payload para la fila en la tabla
+        const payload = {
+          title,
+          description,
+          date_taken,
+          // Si el archivo es un video, forzamos la categoría VIDEO para que sólo se muestre en esa sección
+          category: file.mimetype && file.mimetype.startsWith('video/') ? 'VIDEO' : (category || 'GALERIA'),
+          url,
+          is_public: true
+        };
+        // Si el usuario está autenticado, asociar la foto a su user_id
+        try {
+          const token = req.cookies?.session_token || null;
+          const secret = process.env.SESSION_SECRET || 'change_this_in_production';
+          if (token) {
+            try {
+              const payloadToken = jwt.verify(token, secret);
+              if (payloadToken && payloadToken.userId) payload.user_id = payloadToken.userId;
+            } catch (e) {
+              // token inválido -> ignorar y subir como pública anónima
+            }
+          }
+        } catch (e) { /* ignore */ }
       console.log('DB payload:', payload);
 
       // Insertar registro

@@ -411,6 +411,28 @@ main {
   z-index: 10;
 }
 
+/* Placa del uploader dentro del card-body (no tapa la imagen) */
+.uploader-badge {
+  position: static;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-radius: 8px;
+  background: transparent;
+  margin-bottom: 6px;
+}
+.uploader-badge .uploader-left { display:flex; align-items:center; gap:8px; }
+.uploader-img { width:36px; height:36px; border-radius:50%; object-fit:cover; border:1px solid rgba(0,0,0,0.06); }
+.uploader-name { font-weight:700; color:var(--text); font-size:14px; }
+.uploader-right { display:flex; align-items:center; gap:6px; }
+.uploader-badge button.small { padding:6px 8px; font-size:13px; border-radius:8px; background: transparent; color:var(--text); border:1px solid var(--border); }
+.uploader-badge button.small:hover { transform:translateY(-2px); box-shadow:var(--shadow-sm); background: color-mix(in srgb, var(--primary) 8%, transparent); }
+
+/* Dark theme variant */
+html[data-theme="dark"] .uploader-img { border-color: rgba(255,255,255,0.06); }
+
 .card:hover .card-img,
 .card-img:hover {
   transform: scale(1.05);

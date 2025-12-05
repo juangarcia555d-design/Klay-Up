@@ -508,6 +508,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const delBtn = node.querySelector('.delete');
     if (delBtn) delBtn.addEventListener('click', () => deletePhoto(items[0].id));
 
+    // Mostrar uploader y reacciones como placa sobre la imagen (más atractiva)
+    try {
+      const cardEl = node.querySelector('.card');
+      const uploader = items[0].uploader || null;
+      const overlay = document.createElement('div');
+      overlay.className = 'uploader-badge';
+      // Left: avatar + name
+      const left = document.createElement('div'); left.className = 'uploader-left';
+      if (uploader) {
+        const aimg = document.createElement('img'); aimg.src = uploader.avatar_url || '/imagen/default-avatar.png'; aimg.className = 'uploader-img';
+        const aname = document.createElement('div'); aname.className = 'uploader-name'; aname.textContent = uploader.full_name || 'Usuario';
+        left.appendChild(aimg); left.appendChild(aname);
+      }
+      overlay.appendChild(left);
+
+      // Right: small reaction buttons
+      const right = document.createElement('div'); right.className = 'uploader-right';
+      const likes = document.createElement('button'); likes.className='like-btn small'; likes.textContent = `👍 ${items[0].reactions ? (items[0].reactions.likes||0) : 0}`;
+      const dislikes = document.createElement('button'); dislikes.className='dislike-btn small'; dislikes.textContent = `👎 ${items[0].reactions ? (items[0].reactions.dislikes||0) : 0}`;
+      likes.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); await sendReaction(items[0].id, 'like'); fetchPhotos(); });
+      dislikes.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); await sendReaction(items[0].id, 'dislike'); fetchPhotos(); });
+      const viewList = document.createElement('button'); viewList.className='view-reactions small'; viewList.title='Ver reacciones'; viewList.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); showReactionsModal(items[0].id); });
+      viewList.textContent = '⋯';
+      right.appendChild(likes); right.appendChild(dislikes); right.appendChild(viewList);
+      overlay.appendChild(right);
+
+      const bodyEl = node.querySelector('.card-body');
+      if (bodyEl) bodyEl.insertBefore(overlay, bodyEl.firstChild);
+      else if (cardEl) cardEl.appendChild(overlay);
+    } catch (e) { console.warn('renderGroup meta error', e); }
+
     gallery.appendChild(node);
   }
 
@@ -549,6 +580,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const delBtn = node.querySelector('.delete');
   if (delBtn) delBtn.addEventListener('click', () => deletePhoto(item.id));
 
+  // Mostrar uploader y reacciones como placa sobre la imagen (más atractiva)
+  try {
+    const cardEl = node.querySelector('.card');
+    const uploader = item.uploader || null;
+    const overlay = document.createElement('div');
+    overlay.className = 'uploader-badge';
+    // Left: avatar + name
+    const left = document.createElement('div'); left.className = 'uploader-left';
+    if (uploader) {
+      const aimg = document.createElement('img'); aimg.src = uploader.avatar_url || '/imagen/default-avatar.png'; aimg.className = 'uploader-img';
+      const aname = document.createElement('div'); aname.className = 'uploader-name'; aname.textContent = uploader.full_name || 'Usuario';
+      left.appendChild(aimg); left.appendChild(aname);
+    }
+    overlay.appendChild(left);
+
+    // Right: small reaction buttons
+    const right = document.createElement('div'); right.className = 'uploader-right';
+    const likes = document.createElement('button'); likes.className='like-btn small'; likes.textContent = `👍 ${item.reactions ? (item.reactions.likes||0) : 0}`;
+    const dislikes = document.createElement('button'); dislikes.className='dislike-btn small'; dislikes.textContent = `👎 ${item.reactions ? (item.reactions.dislikes||0) : 0}`;
+    likes.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); await sendReaction(item.id, 'like'); fetchPhotos(); });
+    dislikes.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); await sendReaction(item.id, 'dislike'); fetchPhotos(); });
+    const viewList = document.createElement('button'); viewList.className='view-reactions small'; viewList.title='Ver reacciones'; viewList.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); showReactionsModal(item.id); });
+    viewList.textContent = '⋯';
+    right.appendChild(likes); right.appendChild(dislikes); right.appendChild(viewList);
+    overlay.appendChild(right);
+
+    const bodyEl = node.querySelector('.card-body');
+    if (bodyEl) bodyEl.insertBefore(overlay, bodyEl.firstChild);
+    else if (cardEl) cardEl.appendChild(overlay);
+  } catch (e) { console.warn('renderCard meta error', e); }
+
     // Abrir vista completa al hacer click en la imagen o en el video
     if (img) {
       img.style.cursor = 'zoom-in';
@@ -561,6 +623,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     gallery.appendChild(node);
+  }
+
+  // Enviar reacción (like/dislike)
+  async function sendReaction(photoId, reaction) {
+    try {
+      const res = await fetch(`${API_BASE}/api/photos/${photoId}/reaction`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ reaction }) });
+      if (!res.ok) {
+        const j = await res.json().catch(()=>null);
+        alert((j && j.error) ? j.error : 'No fue posible enviar la reacción');
+      }
+      return true;
+    } catch (e) { console.error('sendReaction error', e); alert('Error enviando reacción'); return false; }
+  }
+
+  // Modal para ver listas de usuarios que reaccionaron
+  function showReactionsModal(photoId) {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/photos/${photoId}/reactions`);
+        if (!res.ok) { alert('No se pudo obtener reacciones'); return; }
+        const j = await res.json();
+        const likes = j.likes || [];
+        const dislikes = j.dislikes || [];
+        // construir modal
+        const modal = document.createElement('div');
+        modal.style.position='fixed'; modal.style.left='0'; modal.style.top='0'; modal.style.right='0'; modal.style.bottom='0'; modal.style.background='rgba(0,0,0,0.45)'; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center'; modal.style.zIndex='100000';
+        const card = document.createElement('div'); card.style.background='var(--bg)'; card.style.color='var(--text)'; card.style.padding='12px'; card.style.borderRadius='12px'; card.style.maxWidth='720px'; card.style.width='92%'; card.style.maxHeight='80vh'; card.style.overflow='auto';
+        card.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong>Reacciones</strong><button id='closeReactionsModal' class='btn'>Cerrar</button></div>`;
+        const lists = document.createElement('div'); lists.style.display='flex'; lists.style.gap='12px'; lists.style.flexWrap='wrap';
+        const likesCol = document.createElement('div'); likesCol.style.flex='1'; likesCol.innerHTML = `<h4>👍 Likes (${j.count_like||likes.length})</h4>`;
+        const dislikesCol = document.createElement('div'); dislikesCol.style.flex='1'; dislikesCol.innerHTML = `<h4>👎 Dislikes (${j.count_dislike||dislikes.length})</h4>`;
+        function appendUsers(container, arr) {
+          if (!arr.length) { const el = document.createElement('div'); el.className='muted'; el.textContent='Nadie aún'; container.appendChild(el); return; }
+          arr.forEach(u => {
+            const row = document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.marginBottom='6px';
+            const img = document.createElement('img'); img.src = u.avatar_url || '/imagen/default-avatar.png'; img.style.width='36px'; img.style.height='36px'; img.style.borderRadius='50%'; img.style.objectFit='cover';
+            const name = document.createElement('div'); name.textContent = u.full_name || (`Usuario ${u.id}`);
+            row.appendChild(img); row.appendChild(name);
+            container.appendChild(row);
+          });
+        }
+        appendUsers(likesCol, likes);
+        appendUsers(dislikesCol, dislikes);
+        lists.appendChild(likesCol); lists.appendChild(dislikesCol);
+        card.appendChild(lists);
+        modal.appendChild(card);
+        document.body.appendChild(modal);
+        document.getElementById('closeReactionsModal').addEventListener('click', ()=>{ try{ document.body.removeChild(modal); }catch(e){} });
+      } catch (e) { console.error('showReactionsModal', e); alert('Error obteniendo reacciones'); }
+    })();
   }
 
   // ⬆️ Subir foto

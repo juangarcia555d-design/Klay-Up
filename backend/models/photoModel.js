@@ -51,3 +51,51 @@ export function getPublicUrl(path) {
 export async function removeFile(path) {
   return supabase.storage.from(BUCKET).remove([path]);
 }
+
+// Reacciones: like / dislike
+export async function addReaction(photoId, userId, reaction) {
+  // reaction: 'like'|'dislike'
+  // Intentar upsert: si existe, actualizar; si no, insertar
+  const payload = { photo_id: photoId, user_id: userId, reaction };
+  try {
+    return await supabase.from('photo_reactions').upsert(payload, { onConflict: 'photo_id,user_id' }).select().single();
+  } catch (e) {
+    const msg = String(e && (e.message || e));
+    if (/does not exist|relation \".*photo_reactions\" does not exist|undefined_table/i.test(msg)) {
+      return { error: { message: 'Tabla photo_reactions no encontrada en la base de datos. Ejecuta la migración en Supabase.' } };
+    }
+    return { error: e };
+  }
+}
+
+export async function removeReaction(photoId, userId) {
+  return supabase.from('photo_reactions').delete().eq('photo_id', photoId).eq('user_id', userId);
+}
+
+export async function getReactions(photoId) {
+  // devolver listas de usuarios para like y dislike, más conteos
+  try {
+    const { data, error } = await supabase.from('photo_reactions').select('user_id,reaction,created_at').eq('photo_id', photoId);
+    if (error) {
+      // Si la tabla no existe, devolver valores vacíos (evita romper la UI)
+      const msg = String(error.message || '');
+      if (/does not exist|relation \".*photo_reactions\" does not exist|undefined_table/i.test(msg)) {
+        return { likes: [], dislikes: [], count_like: 0, count_dislike: 0 };
+      }
+      return { error };
+    }
+    const likes = (data || []).filter(r => r.reaction === 'like').map(r => r.user_id);
+    const dislikes = (data || []).filter(r => r.reaction === 'dislike').map(r => r.user_id);
+    return { likes, dislikes, count_like: likes.length, count_dislike: dislikes.length };
+  } catch (e) {
+    const msg = String(e && (e.message || e));
+    if (/does not exist|relation \".*photo_reactions\" does not exist|undefined_table/i.test(msg)) {
+      return { likes: [], dislikes: [], count_like: 0, count_dislike: 0 };
+    }
+    return { error: e };
+  }
+}
+
+export async function getUserReaction(photoId, userId) {
+  return supabase.from('photo_reactions').select('reaction').eq('photo_id', photoId).eq('user_id', userId).limit(1).maybeSingle();
+}
