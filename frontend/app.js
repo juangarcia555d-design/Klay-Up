@@ -527,8 +527,30 @@ document.addEventListener('DOMContentLoaded', () => {
       const right = document.createElement('div'); right.className = 'uploader-right';
       const likes = document.createElement('button'); likes.className='like-btn small'; likes.textContent = `👍 ${items[0].reactions ? (items[0].reactions.likes||0) : 0}`;
       const dislikes = document.createElement('button'); dislikes.className='dislike-btn small'; dislikes.textContent = `👎 ${items[0].reactions ? (items[0].reactions.dislikes||0) : 0}`;
-      likes.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); await sendReaction(items[0].id, 'like'); fetchPhotos(); });
-      dislikes.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); await sendReaction(items[0].id, 'dislike'); fetchPhotos(); });
+      likes.addEventListener('click', async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        likes.disabled = true; dislikes.disabled = true;
+        const ok = await sendReaction(items[0].id, 'like');
+        if (!ok) { likes.disabled = false; dislikes.disabled = false; return; }
+        const r = await fetchPhotoReactions(items[0].id);
+        if (r) {
+          likes.textContent = `👍 ${r.count_like || (r.likes && r.likes.length) || 0}`;
+          dislikes.textContent = `👎 ${r.count_dislike || (r.dislikes && r.dislikes.length) || 0}`;
+        }
+        likes.disabled = false; dislikes.disabled = false;
+      });
+      dislikes.addEventListener('click', async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        likes.disabled = true; dislikes.disabled = true;
+        const ok = await sendReaction(items[0].id, 'dislike');
+        if (!ok) { likes.disabled = false; dislikes.disabled = false; return; }
+        const r = await fetchPhotoReactions(items[0].id);
+        if (r) {
+          likes.textContent = `👍 ${r.count_like || (r.likes && r.likes.length) || 0}`;
+          dislikes.textContent = `👎 ${r.count_dislike || (r.dislikes && r.dislikes.length) || 0}`;
+        }
+        likes.disabled = false; dislikes.disabled = false;
+      });
       const viewList = document.createElement('button'); viewList.className='view-reactions small'; viewList.title='Ver reacciones'; viewList.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); showReactionsModal(items[0].id); });
       viewList.textContent = '⋯';
       right.appendChild(likes); right.appendChild(dislikes); right.appendChild(viewList);
@@ -599,8 +621,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const right = document.createElement('div'); right.className = 'uploader-right';
     const likes = document.createElement('button'); likes.className='like-btn small'; likes.textContent = `👍 ${item.reactions ? (item.reactions.likes||0) : 0}`;
     const dislikes = document.createElement('button'); dislikes.className='dislike-btn small'; dislikes.textContent = `👎 ${item.reactions ? (item.reactions.dislikes||0) : 0}`;
-    likes.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); await sendReaction(item.id, 'like'); fetchPhotos(); });
-    dislikes.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); await sendReaction(item.id, 'dislike'); fetchPhotos(); });
+    likes.addEventListener('click', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      likes.disabled = true; dislikes.disabled = true;
+      const ok = await sendReaction(item.id, 'like');
+      if (!ok) { likes.disabled = false; dislikes.disabled = false; return; }
+      const r = await fetchPhotoReactions(item.id);
+      if (r) {
+        likes.textContent = `👍 ${r.count_like || (r.likes && r.likes.length) || 0}`;
+        dislikes.textContent = `👎 ${r.count_dislike || (r.dislikes && r.dislikes.length) || 0}`;
+      }
+      likes.disabled = false; dislikes.disabled = false;
+    });
+    dislikes.addEventListener('click', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      likes.disabled = true; dislikes.disabled = true;
+      const ok = await sendReaction(item.id, 'dislike');
+      if (!ok) { likes.disabled = false; dislikes.disabled = false; return; }
+      const r = await fetchPhotoReactions(item.id);
+      if (r) {
+        likes.textContent = `👍 ${r.count_like || (r.likes && r.likes.length) || 0}`;
+        dislikes.textContent = `👎 ${r.count_dislike || (r.dislikes && r.dislikes.length) || 0}`;
+      }
+      likes.disabled = false; dislikes.disabled = false;
+    });
     const viewList = document.createElement('button'); viewList.className='view-reactions small'; viewList.title='Ver reacciones'; viewList.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); showReactionsModal(item.id); });
     viewList.textContent = '⋯';
     right.appendChild(likes); right.appendChild(dislikes); right.appendChild(viewList);
@@ -632,9 +676,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) {
         const j = await res.json().catch(()=>null);
         alert((j && j.error) ? j.error : 'No fue posible enviar la reacción');
+        return false;
       }
       return true;
     } catch (e) { console.error('sendReaction error', e); alert('Error enviando reacción'); return false; }
+  }
+
+  // Obtener recuento de reacciones para una foto (solo counts y arrays)
+  async function fetchPhotoReactions(photoId) {
+    try {
+      const res = await fetch(`${API_BASE}/api/photos/${photoId}/reactions`);
+      if (!res.ok) return null;
+      const j = await res.json();
+      return j;
+    } catch (e) { console.error('fetchPhotoReactions', e); return null; }
   }
 
   // Modal para ver listas de usuarios que reaccionaron
@@ -887,13 +942,14 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { /* ignore positioning errors */ }
     // ensure the profile panel is on top of other floating UI (chat drawer, mini chats)
     try { const chatDrawerEl = document.getElementById('chatDrawer'); if (chatDrawerEl) chatDrawerEl.style.zIndex = '9999'; profilePanel.style.zIndex = '1000000'; } catch(e){}
+    profilePanel.style.display = 'block'; profilePanel.style.visibility = 'visible';
     profilePanel.classList.remove('hidden'); profilePanel.setAttribute('aria-hidden','false');
     // cuando se abre el panel, asegurar que las burbujas se muestren (y ocultar chat si era visible)
     try { const pc = document.getElementById('panelChat'); if (pc) pc.style.display = 'none'; const pb = document.getElementById('panelInboxBubbles'); if (pb) pb.style.display = 'flex'; } catch(e){}
     // empezar polling de las burbujas mientras el panel esté abierto
     try { await refreshPanelBubbles(); startPanelBubblePoll(); } catch(e) { console.warn('panel open refresh failed', e); }
   });
-  if (closeProfileBtn) closeProfileBtn.addEventListener('click', () => { if (profilePanel) { profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true'); } });
+  if (closeProfileBtn) closeProfileBtn.addEventListener('click', () => { if (profilePanel) { profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true'); profilePanel.style.display = 'none'; profilePanel.style.visibility = 'hidden'; } });
 
   if (saveProfileBtn) {
     saveProfileBtn.addEventListener('click', async () => {
@@ -933,7 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const avatarBtn = document.getElementById('profileBtn');
       if (avatarBtn && avatarBtn.contains(ev.target)) return;
       if (profilePanel.contains(ev.target)) return;
-      profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true');
+      profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true'); profilePanel.style.display = 'none'; profilePanel.style.visibility = 'hidden';
       try { stopPanelBubblePoll(); } catch(e){}
     } catch (e) { /* ignore */ }
   });
