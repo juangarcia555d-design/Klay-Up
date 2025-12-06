@@ -62,7 +62,7 @@ export function registerHandler(supabase, sessionSecret) {
         else {
           const { data: urlData } = await supabase.storage.from('avatars').getPublicUrl(key);
           avatarUrl = urlData?.publicUrl || null;
-          // Normalizar URL por si el key o la respuesta generan un doble segmento 'avatars/avatars'
+          // Normalizar URL por si el key o  lla respuesta generan un doble segmento 'avatars/avatars'
           if (avatarUrl && avatarUrl.includes('/avatars/avatars/')) {
             avatarUrl = avatarUrl.replace('/avatars/avatars/', '/avatars/');
           }
