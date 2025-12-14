@@ -20,6 +20,7 @@ import jwt from 'jsonwebtoken';
 export async function listPhotos(req, res) {
   try {
     const { category } = req.query;
+    console.log('listPhotos called with category=', category);
     // Si se solicita una categoría concreta, devolverla.
     // Si no se especifica categoría, ocultar videos para que sólo se vean en la pestaña VIDEO.
     if (category) {
@@ -39,6 +40,7 @@ export async function listPhotos(req, res) {
             const uploader = p.user_id ? usersMap[String(p.user_id)] : null;
             return { ...p, uploader, reactions: { likes: r.count_like || 0, dislikes: r.count_dislike || 0 } };
           }));
+          console.log('listPhotos -> returning', enhanced.length, 'rows; sample categories:', enhanced.slice(0,6).map(x=>x.category));
           return res.json(enhanced);
       } catch (e) {
         // Si la columna is_public no existe en la DB, caeremos a una regla segura: devolver solo filas *sin* user_id (públicas)
@@ -76,6 +78,7 @@ export async function listPhotos(req, res) {
           const uploader = p.user_id ? usersMap[String(p.user_id)] : null;
           return { ...p, uploader, reactions: { likes: r.count_like || 0, dislikes: r.count_dislike || 0 } };
         }));
+        console.log('listPhotos -> returning', enhanced.length, 'rows; sample categories:', enhanced.slice(0,6).map(x=>x.category));
         return res.json(enhanced);
     } catch (e) {
       // fallback si is_public no existe: asumimos que las fotos con user_id son uploads de perfil y no deben mostrarse
@@ -92,6 +95,7 @@ export async function listPhotos(req, res) {
           const r = await getReactions(p.id);
           return { ...p, uploader: null, reactions: { likes: r.count_like || 0, dislikes: r.count_dislike || 0 } };
         }));
+        console.log('listPhotos (fallback) -> returning', enhanced.length, 'rows; sample categories:', enhanced.slice(0,6).map(x=>x.category));
         return res.json(enhanced);
       } catch (e2) {
         return res.status(500).json({ error: e2.message || 'Error interno' });
@@ -190,7 +194,7 @@ export async function checkReactionsTable(req, res) {
 // ⬆️ Subir foto
 export async function addPhoto(req, res) {
   try {
-    const { title, description, date_taken, category } = req.body;
+    const { title, description, date_taken, category, scope } = req.body;
     const files = req.files || (req.file ? [req.file] : []);
 
     if (!files || files.length === 0) return res.status(400).json({ error: 'Archivo(s) requerido(s)' });
@@ -201,6 +205,12 @@ export async function addPhoto(req, res) {
     }
 
     const results = [];
+
+    // Determinar usuario autenticado (si existe) antes del loop, pero NO asociar user_id por defecto
+    const token = req.cookies?.session_token || null;
+    const secret = process.env.SESSION_SECRET || 'change_this_in_production';
+    let authUserId = null;
+    try { if (token) { const p = jwt.verify(token, secret); if (p && p.userId) authUserId = p.userId; } } catch (e) { /* ignore invalid token */ }
 
     for (const file of files) {
       // Validar tipo de archivo: permitir imágenes y videos
@@ -234,17 +244,11 @@ export async function addPhoto(req, res) {
           url,
           is_public: true
         };
-        // Si el usuario está autenticado, asociar la foto a su user_id
+        // Asociar user_id SOLO si la subida es desde el perfil (scope==='profile')
         try {
-          const token = req.cookies?.session_token || null;
-          const secret = process.env.SESSION_SECRET || 'change_this_in_production';
-          if (token) {
-            try {
-              const payloadToken = jwt.verify(token, secret);
-              if (payloadToken && payloadToken.userId) payload.user_id = payloadToken.userId;
-            } catch (e) {
-              // token inválido -> ignorar y subir como pública anónima
-            }
+          if (authUserId && scope === 'profile') {
+            payload.user_id = authUserId;
+            payload.is_public = false;
           }
         } catch (e) { /* ignore */ }
       console.log('DB payload:', payload);
@@ -256,11 +260,39 @@ export async function addPhoto(req, res) {
         console.error('Error creando registro en DB:', createResult.error);
         return res.status(500).json({ error: createResult.error.message || 'DB insert error' });
       }
+      // push raw created row (normalize shape)
       results.push(createResult.data || createResult);
     }
 
-    // Si todo OK, devolver los registros creados
-    res.status(201).json(results);
+    // Enriquecer los resultados con información del uploader (avatar y nombre) cuando exista user_id.
+    // Además, si la subida vino desde index y el usuario estaba autenticado, adjuntar temporalmente `uploader`
+    try {
+      const userIds = Array.from(new Set((results || []).filter(r => r && r.user_id).map(r => r.user_id)));
+      let usersMap = {};
+      if (userIds.length) {
+        const { data: users, error: usersError } = await supabase.from('usuarios').select('id,full_name,avatar_url').in('id', userIds);
+        if (!usersError && users) usersMap = (users || []).reduce((acc, u) => { acc[String(u.id)] = u; return acc; }, {});
+      }
+
+      // If authUserId present, fetch that user's public info once (to attach to index uploads responses)
+      let authUser = null;
+      if (authUserId) {
+        try {
+          const { data: au, error: auErr } = await supabase.from('usuarios').select('id,full_name,avatar_url').eq('id', authUserId).limit(1).maybeSingle();
+          if (!auErr && au) authUser = au;
+        } catch (e) { /* ignore */ }
+      }
+
+      const enhanced = (results || []).map(r => {
+        try {
+          const uploader = r && r.user_id ? usersMap[String(r.user_id)] || null : (authUser && !r.user_id ? authUser : null);
+          return { ...(r || {}), uploader };
+        } catch (e) { return r; }
+      });
+      return res.status(201).json(enhanced);
+    } catch (e) {
+      return res.status(201).json(results);
+    }
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

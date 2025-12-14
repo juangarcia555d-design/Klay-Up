@@ -98,6 +98,21 @@ export default function(supabase) {
     }
   });
 
+  // GET /api/users/:id/info -> devolver campos públicos de usuario
+  router.get('/:id/info', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!id) return res.status(400).json({ error: 'Invalid id' });
+      const { data, error } = await supabase.from('usuarios').select('id,full_name,email,avatar_url,profile_description').eq('id', id).limit(1).maybeSingle();
+      if (error) return res.status(500).json({ error: error.message || error });
+      if (!data) return res.status(404).json({ error: 'Usuario no encontrado' });
+      return res.json({ data });
+    } catch (e) {
+      console.error('/api/users/:id/info error', e);
+      return res.status(500).json({ error: 'Error interno' });
+    }
+  });
+
   // GET /api/users/:id/following
   router.get('/:id/following', async (req, res) => {
     try {

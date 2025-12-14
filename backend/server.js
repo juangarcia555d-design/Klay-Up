@@ -12,6 +12,7 @@ import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import { supabase } from './config/supabase.js';
 import { isFollowing, countFollowers, countFollowing } from './models/followModel.js';
+import chatRoutes from './routes/chatRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -237,6 +238,7 @@ app.use('/api/photos', photoRoutes);
 app.use('/api/music', musicRoutes);
 app.use('/api/users', userRoutes(supabase));
 app.use('/api/messages', messageRoutes(supabase, SESSION_SECRET));
+app.use('/api/chats', chatRoutes(supabase, SESSION_SECRET));
 
 // Iniciar servidor
 app.listen(PORT, () => {

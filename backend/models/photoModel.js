@@ -2,7 +2,7 @@ import { supabase } from '../config/supabase.js';
 
 const BUCKET = 'photos';
 
-export async function getPhotos(category) {
+export function getPhotos(category) {
   let query = supabase
     .from('photos')
     .select('id, title, description, date_taken, category, url, user_id') // 👈 selecciona url
@@ -11,7 +11,7 @@ export async function getPhotos(category) {
   return query;
 }
 
-export async function getPhotosByUser(userId, { includePrivate = false } = {}) {
+export function getPhotosByUser(userId, { includePrivate = false } = {}) {
   let q = supabase
     .from('photos')
     .select('id, title, description, date_taken, category, url, is_public')
