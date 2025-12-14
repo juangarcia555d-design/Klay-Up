@@ -1,5 +1,8 @@
 const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : ''; // Si front y backend están en el mismo servidor
 
+// Version stamp para confirmar que el cliente cargó la versión actual del archivo
+try { console.log('app.js loaded - ts:' + (new Date()).toISOString()); } catch (e) {}
+
 document.addEventListener('DOMContentLoaded', () => {
   const tabs = document.querySelectorAll('.tab');
   const listTitle = document.getElementById('listTitle');
@@ -188,10 +191,13 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tabEl.classList.add('active');
       currentCategory = tabEl.dataset.category || '';
+      console.log('Tab click -> currentCategory set to:', currentCategory);
       if (listTitle) listTitle.textContent = currentCategory ? `Categoría: ${currentCategory}` : 'Todas las fotos';
-      fetchPhotos();
+      fetchPhotos({ force: true });
     });
   }
+
+  // (debug button removed in production UI)
 
   function createCategory(name, persist = true) {
     if (!name) return;
@@ -385,51 +391,118 @@ document.addEventListener('DOMContentLoaded', () => {
     return u.endsWith('.mp4') || u.endsWith('.webm') || u.endsWith('.ogg') || u.endsWith('.mov') || u.endsWith('.m4v');
   }
 
-  async function fetchPhotos() {
+  async function fetchPhotos(opts = {}) {
     if (!gallery) return;
-    gallery.innerHTML = '';
+    const force = !!opts.force;
+    if (force) {
+      try { gallery.innerHTML = ''; } catch (e) {}
+      renderSkeletons(6);
+    } else {
+      if (!gallery.children.length) renderSkeletons(6);
+    }
     const url = currentCategory ? `${API_BASE}/api/photos?category=${encodeURIComponent(currentCategory)}`
                                 : `${API_BASE}/api/photos`;
     try {
       const res = await fetch(url);
       if (!res.ok) {
         console.error('Error al obtener fotos, status:', res.status);
+        removeSkeletons();
         return;
       }
       const data = await res.json();
       if (!Array.isArray(data)) {
         console.warn('Respuesta inesperada al obtener fotos:', data);
+        removeSkeletons();
         return;
       }
-      console.log('Fotos recibidas:', data);
-      photosData = data;
+      console.log('Fotos recibidas (raw):', data);
+      // Filtrar por categoría en cliente por seguridad (case-insensitive)
+      let filtered = data;
+      if (currentCategory) {
+        const cc = String(currentCategory || '').toLowerCase();
+        filtered = (data || []).filter(d => String(d.category || '').toLowerCase() === cc);
+      }
+      console.log('Fotos tras filtro cliente (category=', currentCategory, '):', filtered.length);
+      // actualizar estado local
+      photosData = filtered;
+      // Mostrar contador en el título para feedback inmediato
+      try {
+        if (listTitle) {
+          const count = (photosData || []).length;
+          listTitle.textContent = currentCategory ? `Categoría: ${currentCategory} (${count} fotos)` : `Todas las fotos (${count})`;
+        }
+      } catch (e) {}
+      // Construir mapa de elementos existentes en DOM por id (incluye grupos)
+      const existingMap = new Map();
+      gallery.querySelectorAll('[data-photo-id]').forEach(el => { existingMap.set(String(el.dataset.photoId), el); });
+      gallery.querySelectorAll('[data-photo-ids]').forEach(el => {
+        const ids = (el.dataset.photoIds || '').split(',').map(s=>s.trim()).filter(Boolean);
+        ids.forEach(id => { if (!existingMap.has(String(id))) existingMap.set(String(id), el); });
+      });
+      // Usar los ids de las fotos ya filtradas para decidir qué eliminar del DOM
+      const newIds = new Set((photosData||[]).map(d => String(d.id)));
+      // Remover elementos que ya no existen en el servidor
+      const toRemove = [];
+      existingMap.forEach((el, id) => {
+        if (!newIds.has(String(id))) toRemove.push({ id, el });
+      });
+      // Siempre eliminar elementos que ya no están en el servidor para mantener las categorías sincronizadas.
+      if (toRemove.length > 0) {
+        toRemove.forEach(r => { try { r.el.remove(); } catch(e){} });
+      }
+      // limpiar esqueletos si existían
+      removeSkeletons();
       // Agrupar elementos contiguos que pertenecen a la misma subida (misma title, date_taken y category)
       const groups = [];
       let i = 0;
-      while (i < data.length) {
-        const base = data[i];
+      while (i < photosData.length) {
+        const base = photosData[i];
         let group = [base];
         let j = i + 1;
-        while (j < data.length && data[j].title === base.title && data[j].date_taken === base.date_taken && data[j].category === base.category) {
-          group.push(data[j]);
+        while (j < photosData.length && photosData[j].title === base.title && photosData[j].date_taken === base.date_taken && photosData[j].category === base.category) {
+          group.push(photosData[j]);
           j++;
         }
         if (group.length > 1) groups.push({ type: 'group', items: group, startIndex: i });
         else groups.push({ type: 'single', item: base, index: i });
         i = j;
       }
-      // Renderizar grupos
-      groups.forEach(g => {
-        if (g.type === 'group') renderGroup(g.items, g.startIndex);
-        else renderCard(g.item, g.index);
-      });
+      // Renderizar grupos: si se fuerza, renderizar todo de cero; si no, añadir solo los nuevos
+      if (force) {
+        try { gallery.innerHTML = ''; } catch(e){}
+        groups.forEach(g => { if (g.type === 'group') renderGroup(g.items, g.startIndex); else renderCard(g.item, g.index); });
+      } else {
+        groups.forEach(g => {
+          try {
+            if (g.type === 'group') {
+              const firstId = String(g.items[0].id);
+              const existsAsSingle = !!gallery.querySelector(`[data-photo-id="${firstId}"]`);
+              const existsAsGroup = Array.from(gallery.querySelectorAll('[data-photo-ids]')).some(n=> (n.dataset.photoIds||'').split(',').includes(firstId));
+              if (!existsAsSingle && !existsAsGroup) renderGroup(g.items, g.startIndex);
+            } else {
+              const id = String(g.item.id);
+              const exists = !!gallery.querySelector(`[data-photo-id="${id}"]`) || Array.from(gallery.querySelectorAll('[data-photo-ids]')).some(n=> (n.dataset.photoIds||'').split(',').includes(id));
+              if (!exists) renderCard(g.item, g.index);
+            }
+          } catch(e) { console.warn('render group diff error', e); }
+        });
+      }
+      // Si no hay fotos para la categoría, mostrar mensaje amigable
+      if ((!photosData || photosData.length === 0) && gallery) {
+        const m = document.createElement('div');
+        m.className = 'muted';
+        m.style.padding = '24px';
+        m.textContent = currentCategory ? `No hay fotos en la categoría ${currentCategory}` : 'No hay fotos';
+        gallery.appendChild(m);
+      }
     } catch (err) {
       console.error('Error fetchPhotos:', err);
+      removeSkeletons();
     }
   }
 
   // Renderiza un grupo de imágenes/vídeos como un mosaico dentro de una tarjeta
-  function renderGroup(items, startIndex) {
+  function renderGroup(items, startIndex, opts = {}) {
     if (!items || !items.length) return;
     const tpl = document.getElementById('cardTemplate');
     if (!tpl) return;
@@ -450,7 +523,9 @@ document.addEventListener('DOMContentLoaded', () => {
     thumbWrapper.style.gap = '6px';
     thumbWrapper.style.marginBottom = '8px';
 
-    items.slice(0, 4).forEach((it, idx) => {
+    // Mostrar exactamente 3 miniaturas; la cuarta casilla es '+N más' si hay más de 3 elementos
+    const visible = items.slice(0, 3);
+    visible.forEach((it, idx) => {
       const isV = isVideoUrl(it.url);
       if (isV) {
         const v = document.createElement('video');
@@ -466,6 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         const t = document.createElement('img');
         t.src = it.url;
+        t.loading = 'lazy';
         t.alt = it.title || 'Foto';
         t.className = 'group-thumb';
         t.style.width = '100%';
@@ -477,20 +553,29 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Si hay más de 4 items, añadir indicación
-    if (items.length > 4) {
-      const more = document.createElement('div');
-      more.textContent = `+${items.length - 4} más`;
-      more.style.display = 'flex';
-      more.style.alignItems = 'center';
-      more.style.justifyContent = 'center';
-      more.style.background = 'rgba(0,0,0,0.06)';
-      more.style.height = '120px';
-      more.style.borderRadius = '8px';
-      more.style.fontWeight = '700';
-      more.style.color = 'var(--muted)';
-      thumbWrapper.appendChild(more);
+    // Cuarta casilla: +N más (si aplica)
+    const remaining = items.length - 3;
+    const moreBox = document.createElement('div');
+    moreBox.style.display = 'flex';
+    moreBox.style.alignItems = 'center';
+    moreBox.style.justifyContent = 'center';
+    moreBox.style.background = 'rgba(0,0,0,0.06)';
+    moreBox.style.height = '120px';
+    moreBox.style.borderRadius = '8px';
+    moreBox.style.fontWeight = '700';
+    moreBox.style.color = 'var(--muted)';
+    if (remaining > 0) {
+      moreBox.textContent = `+${remaining} más`;
+    } else {
+      moreBox.textContent = '';
     }
+    moreBox.className = 'group-more-box';
+    moreBox.style.cursor = 'pointer';
+    moreBox.addEventListener('click', () => {
+      // abrir la vista con el primer elemento del grupo; desde ahí se puede navegar por todas
+      if (items && items[0]) openView(items[0], startIndex || 0);
+    });
+    thumbWrapper.appendChild(moreBox);
 
     if (body) body.insertBefore(thumbWrapper, body.firstChild);
 
@@ -518,7 +603,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const left = document.createElement('div'); left.className = 'uploader-left';
       if (uploader) {
         const aimg = document.createElement('img'); aimg.src = uploader.avatar_url || '/imagen/default-avatar.png'; aimg.className = 'uploader-img';
-        const aname = document.createElement('div'); aname.className = 'uploader-name'; aname.textContent = uploader.full_name || 'Usuario';
+        const aname = document.createElement('a'); aname.className = 'uploader-name'; aname.textContent = uploader.full_name || 'Usuario';
+        aname.href = `/u/${uploader.id}`;
+        aname.style.textDecoration = 'none';
+        aname.style.cursor = 'pointer';
+        aname.addEventListener('click', (ev) => { ev.stopPropagation(); /* avoid opening lightbox */ });
         left.appendChild(aimg); left.appendChild(aname);
       }
       overlay.appendChild(left);
@@ -557,14 +646,30 @@ document.addEventListener('DOMContentLoaded', () => {
       overlay.appendChild(right);
 
       const bodyEl = node.querySelector('.card-body');
-      if (bodyEl) bodyEl.insertBefore(overlay, bodyEl.firstChild);
-      else if (cardEl) cardEl.appendChild(overlay);
+      // place overlay AFTER the thumbnails for group cards so it appears below them (match single cards)
+      if (bodyEl) {
+        try {
+          if (thumbWrapper && thumbWrapper.nextSibling) bodyEl.insertBefore(overlay, thumbWrapper.nextSibling);
+          else bodyEl.appendChild(overlay);
+        } catch (e) { bodyEl.appendChild(overlay); }
+      } else if (cardEl) cardEl.appendChild(overlay);
     } catch (e) { console.warn('renderGroup meta error', e); }
 
-    gallery.appendChild(node);
+    // Añadir atributo con los ids del grupo para facilitar actualizaciones puntuales
+    try {
+      const outer = node.querySelector('.card');
+      if (outer) outer.dataset.photoIds = items.map(i => String(i.id)).join(',');
+    } catch (e) {}
+    // marcar el elemento con el id principal de la primera foto del grupo
+    try {
+      const outer = node.querySelector('.card');
+      if (outer && items && items.length) outer.dataset.photoId = String(items[0].id);
+    } catch (e) {}
+    if (opts.prepend) gallery.insertBefore(node, gallery.firstChild);
+    else gallery.appendChild(node);
   }
 
-  function renderCard(item, index) {
+  function renderCard(item, index, opts = {}) {
     if (!item) return;
     const tpl = document.getElementById('cardTemplate');
     if (!tpl) return;
@@ -582,6 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       if (img) {
         img.src = item.url;
+        img.loading = 'lazy';
         img.alt = item.title || 'Foto';
         img.style.display = 'block';
       }
@@ -612,8 +718,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const left = document.createElement('div'); left.className = 'uploader-left';
     if (uploader) {
       const aimg = document.createElement('img'); aimg.src = uploader.avatar_url || '/imagen/default-avatar.png'; aimg.className = 'uploader-img';
-      const aname = document.createElement('div'); aname.className = 'uploader-name'; aname.textContent = uploader.full_name || 'Usuario';
+      const aname = document.createElement('a'); aname.className = 'uploader-name'; aname.textContent = uploader.full_name || 'Usuario';
+      aname.href = `/u/${uploader.id}`;
+      aname.style.textDecoration = 'none';
+      aname.style.cursor = 'pointer';
+      aname.addEventListener('click', (ev) => { ev.stopPropagation(); });
       left.appendChild(aimg); left.appendChild(aname);
+    } else if (item.user_id) {
+      // fallback: fetch public user info
+      (async () => {
+        try {
+          const r = await fetch(`${API_BASE}/api/users/${item.user_id}/info`);
+          if (!r.ok) return;
+          const j = await r.json();
+          const u = j && (j.data || j) ? (j.data || j) : null;
+          if (!u) return;
+          const aimg = document.createElement('img'); aimg.src = u.avatar_url || '/imagen/default-avatar.png'; aimg.className = 'uploader-img';
+          const aname = document.createElement('a'); aname.className = 'uploader-name'; aname.textContent = u.full_name || 'Usuario';
+          aname.href = `/u/${u.id}`; aname.style.textDecoration = 'none'; aname.style.cursor = 'pointer';
+          aname.addEventListener('click', (ev) => { ev.stopPropagation(); });
+          // clear left and append
+          left.innerHTML = ''; left.appendChild(aimg); left.appendChild(aname);
+        } catch (e) { /* ignore */ }
+      })();
     }
     overlay.appendChild(left);
 
@@ -650,10 +777,17 @@ document.addEventListener('DOMContentLoaded', () => {
     right.appendChild(likes); right.appendChild(dislikes); right.appendChild(viewList);
     overlay.appendChild(right);
 
+    // insert overlay at top of card body (original placement)
     const bodyEl = node.querySelector('.card-body');
     if (bodyEl) bodyEl.insertBefore(overlay, bodyEl.firstChild);
     else if (cardEl) cardEl.appendChild(overlay);
   } catch (e) { console.warn('renderCard meta error', e); }
+
+  // marcar el elemento con el id de la foto para futuras búsquedas
+  try {
+    const outer = node.querySelector('.card');
+    if (outer) outer.dataset.photoId = String(item.id);
+  } catch (e) {}
 
     // Abrir vista completa al hacer click en la imagen o en el video
     if (img) {
@@ -666,7 +800,28 @@ document.addEventListener('DOMContentLoaded', () => {
       videoEl.addEventListener('click', (e) => { e.preventDefault(); openView(item, index); });
     }
 
-    gallery.appendChild(node);
+    if (opts.prepend) gallery.insertBefore(node, gallery.firstChild);
+    else gallery.appendChild(node);
+  }
+
+  // Render simple skeleton placeholders to improve perceived load
+  function renderSkeletons(count = 6) {
+    try {
+      const existing = gallery.querySelectorAll('.skeleton-card');
+      if (existing && existing.length) return;
+      for (let i=0;i<count;i++) {
+        const s = document.createElement('div');
+        s.className = 'card skeleton-card';
+        s.style.minHeight = '240px';
+        s.style.opacity = '0.7';
+        s.innerHTML = `<div style="background:linear-gradient(90deg,#eee,#f5f5f5);height:160px;border-radius:8px;margin:16px"></div><div style="padding:12px"><div style="height:16px;background:#eee;border-radius:6px;width:60%;margin-bottom:8px"></div><div style="height:12px;background:#eee;border-radius:6px;width:40%"></div></div>`;
+        gallery.appendChild(s);
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function removeSkeletons() {
+    try { gallery.querySelectorAll('.skeleton-card').forEach(n=>n.remove()); } catch(e){}
   }
 
   // Enviar reacción (like/dislike)
@@ -730,64 +885,159 @@ document.addEventListener('DOMContentLoaded', () => {
     })();
   }
 
-  // ⬆️ Subir foto
+  // ⬆️ Subir foto (UI mejorada: drag&drop, previews y barra de progreso)
   if (uploadForm) {
-    // Auto-seleccionar categoría VIDEO si el usuario selecciona al menos un archivo de video
     const uploadFilesInput = document.getElementById('uploadFiles');
-    if (uploadFilesInput) {
-      uploadFilesInput.addEventListener('change', (e) => {
-        try {
-          const files = Array.from(e.target.files || []);
-          const hasVideo = files.some(f => f && f.type && f.type.startsWith('video/'));
-          if (hasVideo && categorySelect) {
-            categorySelect.value = 'VIDEO';
-          }
-        } catch (err) { /* ignore */ }
+    const dropArea = document.getElementById('dropArea');
+    const selectFilesBtn = document.getElementById('selectFilesBtn');
+    const previewEl = document.getElementById('uploadPreview');
+    const progressWrap = document.getElementById('uploadProgressWrap');
+    const progressBar = document.getElementById('uploadProgressBar');
+    const progressLabel = document.getElementById('progressLabel');
+    const progressPercent = document.getElementById('progressPercent');
+    const clearFilesBtn = document.getElementById('clearFilesBtn');
+
+    let selectedFiles = [];
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024; const dm = 1; const sizes = ['B','KB','MB','GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    function renderPreviews() {
+      previewEl.innerHTML = '';
+      selectedFiles.forEach((f, idx) => {
+        const it = document.createElement('div'); it.className = 'preview-item';
+        const thumb = document.createElement('img'); thumb.className = 'preview-thumb';
+        const meta = document.createElement('div'); meta.className = 'preview-meta';
+        const name = document.createElement('div'); name.className = 'preview-name'; name.textContent = f.name;
+        const sub = document.createElement('div'); sub.className = 'preview-sub'; sub.textContent = `${f.type || 'file'} • ${formatBytes(f.size)}`;
+        meta.appendChild(name); meta.appendChild(sub);
+        const actions = document.createElement('div'); actions.className = 'preview-actions';
+        const removeBtn = document.createElement('button'); removeBtn.className = 'preview-remove'; removeBtn.type = 'button'; removeBtn.textContent = 'Eliminar';
+        removeBtn.addEventListener('click', () => { selectedFiles.splice(idx,1); renderPreviews(); });
+        actions.appendChild(removeBtn);
+        it.appendChild(thumb); it.appendChild(meta); it.appendChild(actions);
+
+        // preview image if possible
+        if (f.type && f.type.startsWith('image/')) {
+          const reader = new FileReader(); reader.onload = (e) => { thumb.src = e.target.result; };
+          reader.readAsDataURL(f);
+        } else {
+          // fallback icon for video/other
+          thumb.src = '/imagen/default-avatar.png'; thumb.style.objectFit = 'contain';
+        }
+        previewEl.appendChild(it);
       });
     }
 
+    // file selection handler
+    if (uploadFilesInput) {
+      uploadFilesInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        files.forEach(f => selectedFiles.push(f));
+        // auto-select VIDEO category if any file is video
+        try { if (selectedFiles.some(x=>x.type && x.type.startsWith('video/')) && categorySelect) categorySelect.value = 'VIDEO'; } catch(e){}
+        renderPreviews();
+      });
+    }
+
+    // select button
+    if (selectFilesBtn && uploadFilesInput) selectFilesBtn.addEventListener('click', () => uploadFilesInput.click());
+
+    // drag & drop
+    if (dropArea) {
+      ['dragenter','dragover'].forEach(ev => dropArea.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); dropArea.classList.add('dragover'); }));
+      ['dragleave','drop','dragend'].forEach(ev => dropArea.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); dropArea.classList.remove('dragover'); }));
+      dropArea.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer; const files = dt && dt.files ? Array.from(dt.files) : [];
+        if (files.length) {
+          files.forEach(f => selectedFiles.push(f));
+          try { if (selectedFiles.some(x=>x.type && x.type.startsWith('video/')) && categorySelect) categorySelect.value = 'VIDEO'; } catch(e){}
+          renderPreviews();
+        }
+      });
+    }
+
+    if (clearFilesBtn) clearFilesBtn.addEventListener('click', () => { selectedFiles = []; renderPreviews(); if (uploadFilesInput) uploadFilesInput.value = ''; });
+
+    // submit handler
     uploadForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const form = new FormData(uploadForm);
-      // create or reuse a progress bar
-      let progress = uploadForm.querySelector('.upload-progress');
-      if (!progress) {
-        progress = document.createElement('div');
-        progress.className = 'upload-progress';
-        progress.style.height = '8px';
-        progress.style.background = 'rgba(0,0,0,0.08)';
-        progress.style.borderRadius = '6px';
-        progress.style.overflow = 'hidden';
-        progress.style.marginTop = '8px';
-        const inner = document.createElement('div'); inner.className = 'upload-progress-inner'; inner.style.width = '0%'; inner.style.height = '100%'; inner.style.background = 'linear-gradient(90deg,#6b46c1,#7c3aed)'; inner.style.transition = 'width 120ms linear'; progress.appendChild(inner);
-        uploadForm.appendChild(progress);
-      }
-      const innerBar = progress.querySelector('.upload-progress-inner');
+      if (!selectedFiles.length) { alert('Selecciona al menos un archivo'); return; }
+      const title = (uploadForm.title && uploadForm.title.value) || '';
+      const dateTaken = (uploadForm.date_taken && uploadForm.date_taken.value) || '';
+      if (!title || !dateTaken) { alert('Completa título y fecha'); return; }
 
-      // Use XHR to get progress events
+      const form = new FormData();
+      // append fields
+      Array.from(uploadForm.elements).forEach(el => {
+        if (!el.name) return;
+        if (el.type === 'file') return; // handled below
+        form.append(el.name, el.value);
+      });
+      // append files (multiple entries allowed)
+      selectedFiles.forEach(f => form.append('file', f));
+      try { form.append('scope', 'index'); } catch(e){}
+
+      // show progress
+      if (progressWrap) { progressWrap.classList.remove('hidden'); progressBar.style.width = '0%'; progressBar.classList.add('animated'); progressLabel.textContent = 'Subiendo...'; progressPercent.textContent = '0%'; }
+
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${API_BASE}/api/photos`);
       xhr.withCredentials = true;
       xhr.upload.onprogress = (ev) => {
         if (!ev.lengthComputable) return;
         const pct = Math.round((ev.loaded / ev.total) * 100);
-        if (innerBar) innerBar.style.width = pct + '%';
+        if (progressBar) progressBar.style.width = pct + '%';
+        if (progressPercent) progressPercent.textContent = pct + '%';
       };
       xhr.onload = async () => {
         try {
           if (xhr.status >= 200 && xhr.status < 300) {
             uploadForm.reset();
-            if (innerBar) innerBar.style.width = '100%';
-            await fetchPhotos();
-            setTimeout(()=>{ try { if (progress) progress.remove(); } catch(e){} }, 600);
+            selectedFiles = [];
+            renderPreviews();
+            if (progressBar) { progressBar.style.width = '100%'; }
+            try {
+              const resp = JSON.parse(xhr.responseText || '[]');
+              const created = Array.isArray(resp) ? resp : (resp ? [resp] : []);
+              if (created.length) {
+                const toAdd = [];
+                created.forEach((c) => {
+                  try {
+                    if ((!c.uploader || !c.uploader.id) && window.currentUser) {
+                      try { c.uploader = { id: window.currentUser.id, full_name: window.currentUser.full_name, avatar_url: window.currentUser.avatar_url }; } catch(e){}
+                    }
+                    if (!currentCategory || String(c.category || '').toLowerCase() === String(currentCategory || '').toLowerCase()) {
+                      toAdd.push(c);
+                    }
+                  } catch (e) { console.warn('append created card error', e); }
+                });
+                if (toAdd.length) {
+                  // Si varios elementos pertenecen a la misma subida (mismo title, date_taken, category), renderizar como grupo
+                  const isGroup = toAdd.length > 1 && toAdd.every(x => x.title === toAdd[0].title && x.date_taken === toAdd[0].date_taken && x.category === toAdd[0].category);
+                  if (isGroup) {
+                    try { renderGroup(toAdd, 0, { prepend: true }); } catch (e) { console.warn('renderGroup after upload failed', e); toAdd.forEach(c=>{ try{ renderCard(c,0,{prepend:true}); }catch(e){} }); }
+                  } else {
+                    toAdd.forEach(c=>{ try{ renderCard(c,0,{prepend:true}); }catch(e){} });
+                  }
+                  photosData = toAdd.concat(photosData || []);
+                }
+              }
+            } catch (e) { console.warn('Could not parse upload response', e); }
+            setTimeout(()=>{ try { if (progressWrap) { progressWrap.classList.add('hidden'); progressBar.classList.remove('animated'); } } catch(e){} }, 800);
           } else {
             const msg = xhr.responseText || 'Error al subir';
             alert('No se pudo subir la foto: ' + msg);
-            try { if (progress) progress.remove(); } catch(e){}
+            try { if (progressWrap) { progressWrap.classList.add('hidden'); progressBar.classList.remove('animated'); } } catch(e){}
           }
         } catch (err) { alert('Error procesando la subida: ' + err.message); }
       };
-      xhr.onerror = () => { alert('Error al subir el archivo'); try { if (progress) progress.remove(); } catch(e){} };
+      xhr.onerror = () => { alert('Error al subir el archivo'); try { if (progressWrap) { progressWrap.classList.add('hidden'); progressBar.classList.remove('animated'); } } catch(e){} };
       xhr.send(form);
     });
   }
@@ -820,7 +1070,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (!res.ok) throw new Error('Error al editar');
         if (editModal) editModal.classList.add('hidden');
-        fetchPhotos();
+        fetchPhotos({ force: true });
       } catch (err) {
         alert('No se pudo editar: ' + err.message);
       }
@@ -835,14 +1085,84 @@ document.addEventListener('DOMContentLoaded', () => {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('Error al eliminar la foto');
-      fetchPhotos();
+      // Intentar eliminar únicamente el nodo DOM correspondiente y actualizar el estado local
+      try {
+        let el = gallery.querySelector(`[data-photo-id="${id}"]`);
+        if (!el) {
+          // buscar en grupos
+          document.querySelectorAll('[data-photo-ids]').forEach(n => {
+            if (el) return;
+            const ids = (n.dataset.photoIds||'').split(',').map(s=>s.trim());
+            if (ids.includes(String(id))) el = n;
+          });
+        }
+        if (el) {
+          const photoIdsRaw = el.dataset.photoIds || '';
+          const idList = photoIdsRaw ? photoIdsRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+          const isGroup = idList.length > 1;
+          if (isGroup) {
+            // actualizar estado local
+            photosData = (photosData || []).filter(p => String(p.id) !== String(id));
+            // actualizar el DOM del grupo sin recargar todo: reconstruir el grupo con los items restantes
+            const remainingIds = idList.filter(x => String(x) !== String(id));
+            // obtener objetos completos desde photosData (si faltan, pedir al servidor más tarde)
+            const remainingItems = (photosData || []).filter(p => remainingIds.includes(String(p.id)));
+            if (remainingIds.length === 0) {
+              try { el.remove(); } catch(e){}
+            } else if (remainingIds.length === 1) {
+              // reemplazar el grupo por una card simple del elemento restante
+              const remaining = remainingItems[0] || null;
+              try {
+                const parent = el.parentNode;
+                const next = el.nextSibling;
+                try { el.remove(); } catch(e){}
+                if (remaining && parent) {
+                  const cloned = document.createElement('div');
+                  // renderCard devuelve un node from template; reuse renderCard by inserting the node then moving it
+                  renderCard(remaining, 0, { prepend: false });
+                  // insert last rendered card at the position where group was (it was appended at end or prepended).
+                  const last = gallery.querySelector('[data-photo-id="' + String(remaining.id) + '"]');
+                  if (last && parent) parent.insertBefore(last, next);
+                }
+              } catch(e) { console.warn('replace group with single failed', e); }
+            } else {
+              // rebuild group card in-place
+              try {
+                const parent = el.parentNode;
+                const next = el.nextSibling;
+                try { el.remove(); } catch(e){}
+                // ensure we have item objects for each id; if any missing, fall back to fetchPhotos
+                if (remainingItems.length === remainingIds.length) {
+                  // render a new group at the same position
+                  renderGroup(remainingItems, 0, { prepend: false });
+                  // move the newly added group to original position (renderGroup appends)
+                  const firstNewId = String(remainingItems[0].id);
+                  const selector = '[data-photo-ids="' + remainingIds.join(',') + '"]';
+                  const newEl = gallery.querySelector(selector);
+                  if (newEl && parent) parent.insertBefore(newEl, next);
+                } else {
+                  // not enough local data — fallback to sync (async)
+                  fetchPhotos().catch(()=>{});
+                }
+              } catch(e) { console.warn('rebuild group failed', e); fetchPhotos().catch(()=>{}); }
+            }
+          } else {
+            try { el.remove(); } catch(e){}
+            photosData = (photosData || []).filter(p => String(p.id) !== String(id));
+          }
+        } else {
+          // si no encontramos elemento en DOM, hacer fetch para sincronizar
+          photosData = (photosData || []).filter(p => String(p.id) !== String(id));
+          fetchPhotos().catch(()=>{});
+        }
+      } catch (e) { console.warn('delete DOM update failed', e); fetchPhotos().catch(()=>{}); }
     } catch (err) {
       alert('No se pudo eliminar: ' + err.message);
     }
   }
 
   // 🚀 Inicial
-  fetchPhotos();
+  fetchPhotos({ force: true });
 
   // Perfil de usuario: cargar datos y manejar panel
   async function loadUserProfile() {
@@ -852,8 +1172,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const j = await res.json();
       if (!j || !j.ok) return;
       const user = j.user || {};
-      // Exponer id del usuario a otras funciones del frontend (para comparar envíos)
-      try { window.currentUserId = user.id || ''; } catch(e){}
+      // Exponer id del usuario y objeto completo a otras funciones del frontend (para comparar/envíar datos)
+      try { window.currentUserId = user.id || ''; window.currentUser = user || null; } catch(e){}
       // rellenar avatar en header
       const avatarImg = document.getElementById('userAvatar');
       const avatarLarge = document.getElementById('profileAvatarLarge');
@@ -869,6 +1189,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (emailEl) emailEl.textContent = user.email || '';
       const descEl = document.getElementById('profileDescription');
       if (descEl) descEl.value = user.profile_description || '';
+      // Solicitar counts de seguidores / siguiendo para mostrar números realess
+      try {
+        const relRes = await fetch(`/api/users/${encodeURIComponent(user.id)}/relationship`, { credentials: 'include' });
+        if (relRes && relRes.ok) {
+          const relJson = await relRes.json();
+          const fEl = document.getElementById('followerCount');
+          const tEl = document.getElementById('followingCount');
+          if (fEl) fEl.textContent = (relJson && typeof relJson.followerCount !== 'undefined') ? String(relJson.followerCount) : '0';
+          if (tEl) tEl.textContent = (relJson && typeof relJson.followingCount !== 'undefined') ? String(relJson.followingCount) : '0';
+        }
+      } catch (e) { /* ignore relationship fetch errors */ }
       if (avatarLarge) {
         avatarLarge.style.cursor = 'pointer';
         avatarLarge.addEventListener('click', async () => {
@@ -950,6 +1281,206 @@ document.addEventListener('DOMContentLoaded', () => {
     try { await refreshPanelBubbles(); startPanelBubblePoll(); } catch(e) { console.warn('panel open refresh failed', e); }
   });
   if (closeProfileBtn) closeProfileBtn.addEventListener('click', () => { if (profilePanel) { profilePanel.classList.add('hidden'); profilePanel.setAttribute('aria-hidden','true'); profilePanel.style.display = 'none'; profilePanel.style.visibility = 'hidden'; } });
+
+  // Crear chat grupal: abrir modal, seleccionar contactos (followers + following), enviar invitaciones
+  const createGroupChatBtn = document.getElementById('createGroupChatBtn');
+  const groupChatModal = document.getElementById('groupChatModal');
+  const closeGroupChatModal = document.getElementById('closeGroupChatModal');
+  const groupContactsList = document.getElementById('groupContactsList');
+  const sendGroupInvitesBtn = document.getElementById('sendGroupInvitesBtn');
+  const groupTitleInput = document.getElementById('groupTitleInput');
+  const invitationsModal = document.getElementById('invitationsModal');
+  const closeInvitationsModal = document.getElementById('closeInvitationsModal');
+  const invitationsList = document.getElementById('invitationsList');
+
+  async function openGroupChatModal() {
+    try {
+      // ensure we have current user id
+      const me = window.currentUserId || null;
+      if (!me) {
+        // try to load profile data
+        await loadUserProfile();
+      }
+      const uid = window.currentUserId;
+      if (!uid) { alert('No autenticado'); return; }
+      groupContactsList.innerHTML = '<div class="muted">Cargando contactos...</div>';
+      // fetch followers and following
+      const [fRes, foRes] = await Promise.all([fetch(`/api/users/${uid}/followers`), fetch(`/api/users/${uid}/following`)]);
+      const followers = fRes.ok ? (await fRes.json()).data || [] : [];
+      const following = foRes.ok ? (await foRes.json()).data || [] : [];
+      const map = new Map();
+      [...followers, ...following].forEach(u => { if (u && u.id) map.set(String(u.id), u); });
+      const list = Array.from(map.values());
+      if (!list.length) { groupContactsList.innerHTML = '<div class="muted">No tienes contactos para invitar</div>'; }
+      else {
+        groupContactsList.innerHTML = '';
+        list.forEach(u => {
+          const row = document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.padding='6px 4px';
+          const cb = document.createElement('input'); cb.type='checkbox'; cb.dataset.userid = u.id;
+          const img = document.createElement('img'); img.src = u.avatar_url || '/imagen/default-avatar.png'; img.style.width='36px'; img.style.height='36px'; img.style.borderRadius='50%'; img.style.objectFit='cover';
+          const txt = document.createElement('div'); txt.innerHTML = `<strong>${u.full_name || u.email}</strong><div style="font-size:12px;color:var(--muted)">${u.profile_description ? u.profile_description.substr(0,80) : ''}</div>`;
+          row.appendChild(cb); row.appendChild(img); row.appendChild(txt);
+          groupContactsList.appendChild(row);
+        });
+      }
+      groupChatModal.classList.remove('hidden'); groupChatModal.setAttribute('aria-hidden','false');
+    } catch (e) { console.error('openGroupChatModal', e); alert('Error cargando contactos'); }
+  }
+
+  if (createGroupChatBtn) createGroupChatBtn.addEventListener('click', (e) => { e.preventDefault(); openGroupChatModal(); });
+  if (closeGroupChatModal) closeGroupChatModal.addEventListener('click', ()=>{ groupChatModal.classList.add('hidden'); groupChatModal.setAttribute('aria-hidden','true'); });
+
+  if (sendGroupInvitesBtn) sendGroupInvitesBtn.addEventListener('click', async () => {
+    try {
+      const checks = Array.from(groupContactsList.querySelectorAll('input[type="checkbox"]')).filter(c=>c.checked);
+      if (!checks.length) { alert('Selecciona al menos una persona'); return; }
+      const ids = checks.map(c => Number(c.dataset.userid)).filter(Boolean);
+      const title = (groupTitleInput && groupTitleInput.value) ? groupTitleInput.value : 'Chat grupal';
+      const res = await fetch(`${API_BASE}/api/chats/invite`, { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({ title, invitees: ids }) });
+      if (!res.ok) { const j = await res.json().catch(()=>null); alert((j && j.error) ? j.error : 'No se pudo enviar invitaciones'); return; }
+      alert('Invitaciones enviadas'); groupChatModal.classList.add('hidden'); groupChatModal.setAttribute('aria-hidden','true');
+    } catch (e) { console.error('sendGroupInvites', e); alert('Error enviando invitaciones'); }
+  });
+
+  // Invitations modal
+  async function openInvitationsModal() {
+    try {
+      invitationsList.innerHTML = '<div class="muted">Cargando...</div>';
+      const res = await fetch(`${API_BASE}/api/chats/invitations`, { credentials: 'include' });
+      if (!res.ok) { invitationsList.innerHTML = '<div class="muted">Error cargando invitaciones</div>'; return; }
+      const j = await res.json(); const items = j.data || [];
+      if (!items.length) { invitationsList.innerHTML = '<div class="muted">No tienes invitaciones</div>'; }
+      else {
+        invitationsList.innerHTML = '';
+        items.forEach(inv => {
+          const row = document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.padding='8px'; row.style.borderBottom='1px solid var(--border)';
+          const info = document.createElement('div'); info.style.flex='1';
+          const inviterId = inv.chat_invite_groups && inv.chat_invite_groups.inviter_id ? inv.chat_invite_groups.inviter_id : null;
+          const title = inv.chat_invite_groups && inv.chat_invite_groups.title ? inv.chat_invite_groups.title : 'Invitación a chat grupal';
+          info.innerHTML = `<div style="font-weight:700">${title}</div><div class="muted">Invitado por: ${inviterId || 'Usuario'}</div>`;
+          const acceptBtn = document.createElement('button'); acceptBtn.className='btn primary'; acceptBtn.textContent='Aceptar';
+          const rejectBtn = document.createElement('button'); rejectBtn.className='btn ghost'; rejectBtn.textContent='Rechazar';
+          acceptBtn.addEventListener('click', async ()=>{
+            try {
+              const r = await fetch(`${API_BASE}/api/chats/invitations/${inv.id}/respond`, { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ accept: true }) });
+              if (!r.ok) { const j = await r.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error aceptando invitación'); return; }
+              const j = await r.json().catch(()=>null);
+              alert('Has aceptado la invitación');
+              // si el servidor creó el chat, abrirlo
+              try { if (j && j.result && j.result.chat_id) { await fetchChats(); openGroupChat(j.result.chat_id, (j.result.title || inv.chat_invite_groups && inv.chat_invite_groups.title)); return; } } catch(e){}
+              openInvitationsModal();
+            } catch (e) { console.error('accept invite error', e); alert('Error aceptando invitación'); }
+          });
+          rejectBtn.addEventListener('click', async ()=>{
+            try {
+              const r = await fetch(`${API_BASE}/api/chats/invitations/${inv.id}/respond`, { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ accept: false }) });
+              if (!r.ok) { const j = await r.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error rechazando invitación'); return; }
+              alert('Has rechazado la invitación');
+              openInvitationsModal();
+            } catch (e) { console.error('reject invite error', e); alert('Error rechazando invitación'); }
+          });
+          row.appendChild(info); row.appendChild(acceptBtn); row.appendChild(rejectBtn);
+          invitationsList.appendChild(row);
+        });
+      }
+      invitationsModal.classList.remove('hidden'); invitationsModal.setAttribute('aria-hidden','false');
+    } catch (e) { console.error('openInvitationsModal', e); invitationsList.innerHTML = '<div class="muted">Error</div>'; }
+  }
+
+  if (closeInvitationsModal) closeInvitationsModal.addEventListener('click', ()=>{ invitationsModal.classList.add('hidden'); invitationsModal.setAttribute('aria-hidden','true'); });
+
+  // Polling periódico para actualizar badge de invitaciones y abrir modal al hacer click
+  const invitationsBtn = document.getElementById('invitationsBtn');
+  const invitationsBadge = document.getElementById('invitationsBadge');
+  async function fetchInvitationCount() {
+    try {
+      const r = await fetch(`${API_BASE}/api/chats/invitations`, { credentials: 'include' });
+      if (!r.ok) {
+        if (invitationsBadge) invitationsBadge.style.display = 'none';
+        return;
+      }
+      const j = await r.json().catch(()=>({ data: [] }));
+      const items = (j && j.data) ? j.data : [];
+      const pending = (items || []).filter(i => (i.status || 'pending') === 'pending').length;
+      if (invitationsBadge) {
+        if (pending > 0) { invitationsBadge.style.display = 'flex'; invitationsBadge.textContent = String(pending); }
+        else { invitationsBadge.style.display = 'none'; }
+      }
+    } catch (e) {
+      // silent
+    }
+  }
+
+  if (invitationsBtn) {
+    invitationsBtn.addEventListener('click', (ev) => { ev.preventDefault(); try { openInvitationsModal(); } catch(e){ window.dispatchEvent(new CustomEvent('openInvitationsPanel')); } });
+  }
+  // Arrancar polling inmediato y cada 20s
+  fetchInvitationCount();
+  setInterval(fetchInvitationCount, 20_000);
+
+  // --- Chats: fetch list of chats and open group chat ---
+  async function fetchChats() {
+    try {
+      const res = await fetch(`${API_BASE}/api/chats`, { credentials: 'include' });
+      if (!res.ok) return [];
+      const j = await res.json().catch(()=>({ data: [] }));
+      const chats = (j && j.data) ? j.data : [];
+      // render small buttons in profile panel container
+      try {
+        const container = document.getElementById('panelInboxBubbles');
+        if (container) {
+          // keep existing DM bubbles, but append group chats after them
+          // remove previous group chat markers
+          Array.from(container.querySelectorAll('.group-chat-btn')).forEach(n=>n.remove());
+          chats.forEach(ch => {
+            const btn = document.createElement('button');
+            btn.className = 'panel-chat-bubble group-chat-btn';
+            btn.title = ch.title || ('Chat ' + (ch.id || '')); btn.style.background = 'linear-gradient(90deg, rgba(59,130,246,0.06), transparent)';
+            btn.setAttribute('data-chatid', String(ch.id));
+            btn.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px;min-width:48px"><div style="width:36px;height:36px;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#60a5fa);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">${(ch.title||'').substring(0,1)||'G'}</div><div style="font-size:11px;max-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(ch.title||'Grupo')}</div></div>`;
+            btn.addEventListener('click', () => { openGroupChat(ch.id, ch.title); });
+            container.appendChild(btn);
+          });
+        }
+      } catch (e) { /* ignore render errors */ }
+      return chats;
+    } catch (e) { console.error('fetchChats error', e); return []; }
+  }
+
+  async function openGroupChat(chatId, title) {
+    if (!chatId) return;
+    try {
+      // reuse global drawer UI
+      if (!gchatDrawer) return;
+      if (gchatTitle) gchatTitle.textContent = title || 'Chat grupal';
+      gchatDrawer.style.display = 'flex';
+      // load messages from chats endpoint
+      const res = await fetch(`${API_BASE}/api/chats/${chatId}/messages`, { credentials: 'include' });
+      if (!res.ok) { gchatBody.innerHTML = '<div class="muted">No se pudo cargar la conversación</div>'; return; }
+      const j = await res.json().catch(()=>({ data: [] }));
+      const msgs = (j && j.data) ? j.data : [];
+      renderGMessages(msgs);
+      stopGPoll(); gpoll = setInterval(()=> fetch(`${API_BASE}/api/chats/${chatId}/messages`, { credentials: 'include' }).then(r=>r.ok?r.json():null).then(j=>{ if (j && j.data) renderGMessages(j.data); }).catch(()=>{}), 2500);
+      if (gchatSend) {
+        gchatSend.onclick = async () => {
+          const text = gchatInput && gchatInput.value && gchatInput.value.trim();
+          if (!text) return;
+          try {
+            const r = await fetch(`${API_BASE}/api/chats/${chatId}/messages`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ content: text }) });
+            if (!r.ok) { const j = await r.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error enviando mensaje'); return; }
+            if (gchatInput) gchatInput.value = '';
+            const nr = await fetch(`${API_BASE}/api/chats/${chatId}/messages`, { credentials: 'include' }); if (nr.ok) { const nj = await nr.json().catch(()=>null); if (nj && nj.data) renderGMessages(nj.data); }
+          } catch(e){ console.error('send group message error', e); }
+        };
+      }
+      if (gchatInput) gchatInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (gchatSend) gchatSend.click(); } };
+    } catch (e) { console.error('openGroupChat error', e); }
+  }
+
+  // initial load of chats for panel
+  fetchChats().catch(()=>{});
+  // For convenience open invitations when profile panel opens
+  window.addEventListener('openProfilePanel', ()=>{ /* leave invitation handling to user click for now */ });
 
   if (saveProfileBtn) {
     saveProfileBtn.addEventListener('click', async () => {
