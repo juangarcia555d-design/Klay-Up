@@ -464,10 +464,16 @@ main {
 }
 .uploader-badge .uploader-left { display:flex; align-items:center; gap:10px; }
 .uploader-img { width:32px; height:32px; border-radius:50%; object-fit:cover; border:1px solid rgba(0,0,0,0.06); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-.uploader-name { font-weight:600; color:var(--text); font-size:14px; }
+.uploader-name { font-weight:700; color:var(--text) !important; font-size:14px; display:inline-block; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .uploader-name:hover { text-decoration:underline; color: color-mix(in srgb, var(--primary) 70%, var(--text)); }
 .uploader-right { display:flex; align-items:center; gap:8px; }
 .uploader-badge button.small { padding:6px 10px; font-size:13px; border-radius:8px; background: transparent; color:var(--text) !important; border:1px solid color-mix(in srgb, var(--border) 70%, rgba(0,0,0,0.06)) !important; }
+/* ensure the uploader area is always visible and not clipped */
+.card { overflow: visible; }
+
+.uploader-badge { min-height:40px; }
+
+.uploader-left img { display:block; }
 .uploader-badge button.small:hover { transform:translateY(-2px); box-shadow:0 6px 14px rgba(0,0,0,0.10); background: color-mix(in srgb, var(--primary) 8%, transparent); }
 
 /* Dark theme variant */
