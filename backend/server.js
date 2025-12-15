@@ -101,13 +101,14 @@ app.get('/profile', async (req, res) => {
     // obtener usuario
     const { data: userData, error: userErr } = await supabase.from('usuarios').select('id,email,full_name,avatar_url,profile_description,theme').eq('id', userId).limit(1).maybeSingle();
     if (userErr || !userData) return res.redirect('/login');
-    // obtener fotos del usuario (todo: el propietario ve todas, otros -> sólo públicas)
+    // obtener solo fotos de perfil (is_public = false) — evitar que los uploads públicos de la galería
+    // se muestren automáticamente en la página de perfil del usuario.
     let photosData = [];
     try {
-      const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', userId).order('created_at', { ascending: false });
+      const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', userId).eq('is_public', false).order('created_at', { ascending: false });
       photosData = data || [];
     } catch (e) {
-      // si is_public no existe, obtener sin esa columna
+      // si la columna is_public no existe en la DB, caeremos al comportamiento anterior: mostrar todas
       try {
         const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url').eq('user_id', userId).order('created_at', { ascending: false });
         photosData = data || [];
