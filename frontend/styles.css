@@ -118,6 +118,78 @@ header {
   50% { background-position: 100% 50%; }
 }
 
+/* Emoji picker styles (copied to ensure availability on all pages) */
+.emoji-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  width: 34px;
+  height: 34px;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.emoji-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px;
+  background: var(--card, #fff);
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.12);
+  border-radius: 12px;
+  z-index: 999999;
+  min-width: 160px;
+  max-width: 260px;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.emoji-picker.hidden { display: none; }
+.emoji-pick { width:48px; height:48px; cursor:pointer; border-radius:8px; object-fit:contain; transition: transform .12s ease, box-shadow .12s ease; }
+.emoji-pick:hover { transform: translateY(-4px) scale(1.06); box-shadow: 0 10px 20px rgba(0,0,0,0.12); }
+.inline-emoji { width:80px; height:80px; vertical-align:middle; margin:0 6px; object-fit:contain; }
+
+@media (max-width:600px){
+  .emoji-picker { grid-template-columns: repeat(3,1fr); }
+}
+
+/* Picker appearance/arrow + show/hide animation */
+.emoji-picker {
+  transition: transform .14s ease, opacity .12s ease;
+  transform-origin: top center;
+  opacity: 1;
+  pointer-events: auto;
+}
+.emoji-picker.hidden {
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+}
+.emoji-picker::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -6px;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid var(--card, #fff);
+}
+.emoji-picker.above::before {
+  top: auto;
+  bottom: -6px;
+  border-bottom: none;
+  border-top: 7px solid var(--card, #fff);
+}
+
 .brand-text {
   min-width: 0;
 }

@@ -1,0 +1,58 @@
+/* Estilos específicos para la página índice
+   Este archivo contiene reglas de layout y componentes propios
+   además de los estilos del selector de emojis. */
+
+:root{
+  --card-bg: #ffffff;
+  --text: #111827;
+}
+
+/* Layout básico */
+body{ font-family: Inter, system-ui, Arial, sans-serif; color:var(--text); }
+.grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+.card{ background:var(--card-bg); border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.05); }
+.card img{ width:100%; height:auto; display:block; }
+
+/* Uploader badge */
+.card .uploader-badge{ position:absolute; left:8px; top:8px; display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.9); padding:6px 8px; border-radius:999px; box-shadow:0 6px 18px rgba(0,0,0,0.06); z-index:10; }
+.uploader-badge img{ width:28px; height:28px; border-radius:50%; object-fit:cover; }
+
+/* Emoji picker styles */
+.emoji-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  width: 34px;
+  height: 34px;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.emoji-picker {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  padding: 6px;
+  background: var(--card-bg, #fff);
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.08);
+  border-radius: 10px;
+  z-index: 999999;
+  max-width: 220px;
+}
+
+.emoji-picker.hidden { display: none; }
+.emoji-pick { width:28px; height:28px; cursor:pointer; border-radius:6px; object-fit:contain; transition: transform .12s ease, box-shadow .12s ease; }
+.emoji-pick:hover { transform: translateY(-2px) scale(1.06); box-shadow: 0 6px 14px rgba(0,0,0,0.08); }
+.inline-emoji { width:18px; height:18px; vertical-align:middle; margin:0 3px; object-fit:contain; }
+
+/* Responsive touches */
+@media (max-width:600px){
+  .grid{ grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); }
+  .emoji-picker { grid-template-columns: repeat(5,1fr); }
+}

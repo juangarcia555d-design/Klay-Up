@@ -216,6 +216,16 @@ app.get('/api/avatars', async (req, res) => {
   } catch (e) { console.warn('api/avatars error', e && e.message); return res.json({ data: [] }); }
 });
 
+// API para listar emojis locales (frontend/imagen/emojis)
+app.get('/api/emojis', async (req, res) => {
+  try {
+    const emojisDir = path.join(__dirname, '../frontend/imagen/emojis');
+    const files = await fs.readdir(emojisDir).catch(()=>[]);
+    const filtered = (files || []).filter(f => /\.(png|jpe?g|gif|webp|svg)$/i.test(f));
+    return res.json({ data: filtered });
+  } catch (e) { console.warn('api/emojis error', e && e.message); return res.json({ data: [] }); }
+});
+
 // Mount auth routes (server-side register/login/logout)
 app.use('/auth', createAuthRoutes(supabase, SESSION_SECRET));
 

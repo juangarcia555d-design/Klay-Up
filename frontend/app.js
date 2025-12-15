@@ -1898,6 +1898,162 @@ document.addEventListener('DOMContentLoaded', () => {
   const gchatSend = document.getElementById('chatSend');
   const gchatClose = document.getElementById('chatClose');
 
+  // --- Emoji picker support ---
+  const EMOJI_BASE = '/imagen/emojis/';
+  let EMOJI_FILES = [];
+
+  function createEmojiPicker(targetInput) {
+    const wrap = document.createElement('div');
+    wrap.className = 'emoji-picker hidden';
+    EMOJI_FILES.forEach(f => {
+      const img = document.createElement('img');
+      img.src = EMOJI_BASE + f;
+      img.className = 'emoji-pick';
+      img.title = f;
+      img.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // insert token <:eX:> where X is filename without extension
+        const id = f.replace(/\.png$/,'');
+        insertAtCursor(targetInput, `<:e${id}:>`);
+        // hide picker after select
+        wrap.classList.add('hidden');
+        targetInput.focus();
+      };
+      wrap.appendChild(img);
+    });
+    document.body.appendChild(wrap);
+    // prevent clicks inside the picker from bubbling and closing it
+    wrap.addEventListener('click', (e) => { e.stopPropagation(); });
+    // register picker globally so a single document listener can close them
+    try { window._emojiPickers = window._emojiPickers || []; window._emojiPickers.push(wrap); } catch(e){}
+    try { console.log('[emoji] picker created for input', targetInput && targetInput.id); } catch(e){}
+    return wrap;
+  }
+
+  function insertAtCursor(input, text) {
+    try {
+      const start = input.selectionStart || 0;
+      const end = input.selectionEnd || 0;
+      const val = input.value || '';
+      input.value = val.slice(0, start) + text + val.slice(end);
+      const pos = start + text.length;
+      input.selectionStart = input.selectionEnd = pos;
+    } catch(e) { input.value = (input.value || '') + text; }
+  }
+
+  function attachEmojiButtonFor(inputEl) {
+    if (!inputEl) return;
+    // avoid attaching twice
+    if (inputEl._emojiAttached) return; inputEl._emojiAttached = true;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'emoji-btn no-shimmer'; btn.title = 'Emojis'; btn.style.padding = '8px'; btn.style.marginLeft = '8px';
+    btn.textContent = '😊';
+    const picker = createEmojiPicker(inputEl);
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try { console.log('[emoji] button clicked for', inputEl && inputEl.id); } catch(e){}
+      // hide other pickers
+      try { (window._emojiPickers || []).forEach(p => { if (p !== picker) p.classList.add('hidden'); }); } catch(e){}
+      // position picker centered under the button; if no space below, show above
+      const wasHidden = picker.classList.contains('hidden');
+      requestAnimationFrame(() => {
+        try {
+          const r = btn.getBoundingClientRect();
+          // ensure we measure the picker size even if it's hidden
+          let pickerW = picker.offsetWidth || 0;
+          let pickerH = picker.offsetHeight || 0;
+          if ((!pickerW || !pickerH) && picker.classList.contains('hidden')) {
+            const prevVis = picker.style.visibility;
+            const prevDisplay = picker.style.display;
+            try {
+              picker.style.visibility = 'hidden';
+              picker.style.display = 'grid';
+              picker.classList.remove('hidden');
+              pickerW = picker.offsetWidth || 220;
+              pickerH = picker.offsetHeight || 160;
+            } finally {
+              picker.classList.add('hidden');
+              picker.style.display = prevDisplay || '';
+              picker.style.visibility = prevVis || '';
+            }
+          }
+          picker.style.position = 'fixed';
+          picker.style.zIndex = 1000000;
+          let left = r.left + (r.width/2) - (pickerW/2);
+          left = Math.max(8, Math.min(left, window.innerWidth - pickerW - 8));
+          let top = r.bottom + 8;
+          picker.classList.remove('above');
+          if (top + pickerH > window.innerHeight - 8) {
+            top = r.top - pickerH - 8;
+            picker.classList.add('above');
+          }
+          picker.style.left = (Math.round(left)) + 'px';
+          picker.style.top = (Math.round(top)) + 'px';
+          if (wasHidden) {
+            picker.classList.remove('hidden');
+            picker.style.transform = 'scale(0.96)';
+            setTimeout(()=> picker.style.transform = 'scale(1)', 10);
+          } else {
+            picker.classList.add('hidden');
+          }
+        } catch(e) { picker.classList.toggle('hidden'); }
+      });
+    };
+    // place button after input (fallback to appending to body)
+    try {
+      if (inputEl.parentNode) inputEl.parentNode.insertBefore(btn, inputEl.nextSibling);
+      else document.body.appendChild(btn);
+    } catch(e){ try { document.body.appendChild(btn); } catch(e){} }
+  }
+
+  // Attach emoji button to global chat input and any inputs with class 'chat-input'
+  (async function initEmojiPicker() {
+    try {
+      const res = await fetch('/api/emojis');
+      if (res.ok) {
+        const j = await res.json();
+        EMOJI_FILES = Array.isArray(j.data) ? j.data : [];
+      }
+    } catch(e) { /* ignore */ }
+    // fallback to default set if none found
+    if (!EMOJI_FILES || EMOJI_FILES.length === 0) {
+      EMOJI_FILES = ['1.png','2.png','3.png','4.png','5.png','6.png','7.png','8.png','9.png'];
+    }
+    try {
+      attachEmojiButtonFor(gchatInput);
+      document.querySelectorAll('.chat-input').forEach(el => { try { attachEmojiButtonFor(el); } catch(e){} });
+    } catch(e) { /* ignore */ }
+
+    // If inputs are not yet present, attach when DOM is ready
+    try {
+      if (!gchatInput) {
+        document.addEventListener('DOMContentLoaded', () => {
+          try { attachEmojiButtonFor(document.getElementById('chatInput')); } catch(e){}
+          try { document.querySelectorAll('.chat-input').forEach(el => { try { attachEmojiButtonFor(el); } catch(e){} }); } catch(e){}
+        });
+      }
+    } catch(e) {}
+
+    // Ensure a single global document click listener to close any open pickers
+    try {
+      if (!window._emojiPickerGlobalAttached) {
+        window._emojiPickerGlobalAttached = true;
+        document.addEventListener('click', (ev) => {
+          try {
+            const t = ev && ev.target;
+            if (t && (t.closest && (t.closest('.emoji-picker') || t.closest('.emoji-btn')))) {
+              // click inside picker or on the emoji button — ignore
+              return;
+            }
+            (window._emojiPickers || []).forEach(p => p.classList.add('hidden'));
+          } catch(e){}
+        });
+      }
+    } catch(e) {}
+  })();
+
   function renderGMessages(messages) {
     if (!gchatBody) return;
     gchatBody.innerHTML = '';
@@ -1905,7 +2061,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const me = (String(m.sender_id) === String(window.currentUserId || ''));
       const el = document.createElement('div');
       el.style.display = 'flex'; el.style.justifyContent = me ? 'flex-end' : 'flex-start';
-      el.innerHTML = `<div style="max-width:78%;padding:6px;border-radius:8px;background:${me ? 'linear-gradient(90deg,#0ea5a0,#06b6d4)' : 'rgba(0,0,0,0.06)'};color:${me ? '#fff' : 'var(--text)'}">${escapeHtml(m.content)}<div style="font-size:10px;margin-top:6px;opacity:0.7;text-align:right">${(new Date(m.created_at)).toLocaleString()}</div></div>`;
+      // allow emoji tokens like <:e1:> to be rendered as images from EMOJI_BASE
+      let content = escapeHtml(m.content || '');
+      // escaped token will look like &lt;:e1:&gt; so replace that with an <img>
+      content = content.replace(/&lt;:e(\d+):&gt;/g, function(_, id){ return `<img src="${EMOJI_BASE}${id}.png" class="inline-emoji" alt="emoji" />`; });
+      el.innerHTML = `<div style="max-width:78%;padding:6px;border-radius:8px;background:${me ? 'linear-gradient(90deg,#0ea5a0,#06b6d4)' : 'rgba(0,0,0,0.06)'};color:${me ? '#fff' : 'var(--text)'}">${content}<div style="font-size:10px;margin-top:6px;opacity:0.7;text-align:right">${(new Date(m.created_at)).toLocaleString()}</div></div>`;
       gchatBody.appendChild(el);
     });
     gchatBody.scrollTop = gchatBody.scrollHeight;
