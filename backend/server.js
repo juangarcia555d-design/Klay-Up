@@ -141,19 +141,16 @@ app.get('/u/:id', async (req, res) => {
 
     const viewerIsOwner = viewerId && Number(viewerId) === Number(id);
 
-    // si el visitante es el dueño, mostrar SOLO fotos de perfil (is_public = false)
-    // si no, mostrar SOLO fotos públicas (is_public = true)
+    // Mostrar SOLO fotos de perfil (`is_public = false`) en la vista de usuario.
+    // Queremos que las fotos subidas desde la galería pública (index, is_public = true)
+    // NO aparezcan en los perfiles — tanto para el propietario como para visitantes.
     let photosData = [];
     try {
-      if (viewerIsOwner) {
-        const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', id).eq('is_public', false).order('created_at', { ascending: false });
-        photosData = data || [];
-      } else {
-        const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', id).eq('is_public', true).order('created_at', { ascending: false });
-        photosData = data || [];
-      }
+      const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', id).eq('is_public', false).order('created_at', { ascending: false });
+      photosData = data || [];
     } catch (e) {
-      // si la columna is_public no existe, caer al comportamiento anterior (mostrar por user_id)
+      // Si la columna `is_public` no existe (migraciones antiguas), caemos al comportamiento
+      // seguro: mostrar solo por `user_id` (esto puede incluir uploads públicos).
       try {
         const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url').eq('user_id', id).order('created_at', { ascending: false });
         photosData = data || [];
