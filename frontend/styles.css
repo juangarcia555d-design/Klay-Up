@@ -456,9 +456,10 @@ main {
   padding: 8px 10px;
   margin-top: 8px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--bg) 94%, #00000010);
-  border: 1px solid color-mix(in srgb, var(--muted) 8%, transparent);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+  background: color-mix(in srgb, var(--card) 88%, rgba(0,0,0,0.06)) !important;
+  border: 1px solid color-mix(in srgb, var(--border) 90%, rgba(0,0,0,0.06)) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 60;
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 .uploader-badge .uploader-left { display:flex; align-items:center; gap:10px; }
@@ -466,7 +467,7 @@ main {
 .uploader-name { font-weight:600; color:var(--text); font-size:14px; }
 .uploader-name:hover { text-decoration:underline; color: color-mix(in srgb, var(--primary) 70%, var(--text)); }
 .uploader-right { display:flex; align-items:center; gap:8px; }
-.uploader-badge button.small { padding:6px 10px; font-size:13px; border-radius:8px; background: transparent; color:var(--text); border:1px solid rgba(0,0,0,0.06); }
+.uploader-badge button.small { padding:6px 10px; font-size:13px; border-radius:8px; background: transparent; color:var(--text) !important; border:1px solid color-mix(in srgb, var(--border) 70%, rgba(0,0,0,0.06)) !important; }
 .uploader-badge button.small:hover { transform:translateY(-2px); box-shadow:0 6px 14px rgba(0,0,0,0.10); background: color-mix(in srgb, var(--primary) 8%, transparent); }
 
 /* Dark theme variant */
@@ -517,7 +518,7 @@ html[data-theme="dark"] .uploader-img { border-color: rgba(255,255,255,0.06); }
 }
 
 /* ========== Profile popover / panel ========== */
-.profile-popover { width:360px; max-width:92vw; background: var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,0.12); padding:12px; color:var(--text); }
+.profile-popover { width:360px; max-width:92vw; background: color-mix(in srgb, var(--card) 94%, rgba(0,0,0,0.04)); border:1px solid color-mix(in srgb, var(--border) 85%, rgba(0,0,0,0.06)); border-radius:12px; box-shadow:0 12px 40px color-mix(in srgb, rgba(0,0,0,0.35) 80%, transparent); padding:12px; color:var(--text); backdrop-filter: blur(6px); }
 .profile-popover .profile-panel-inner { display:flex; flex-direction:column; gap:12px; }
 .profile-top { display:flex; gap:12px; align-items:center; }
 .profile-avatar-wrap { width:80px; height:80px; flex:0 0 80px; border-radius:999px; overflow:hidden; box-shadow:0 8px 20px rgba(0,0,0,0.12); display:flex; align-items:center; justify-content:center; }
@@ -546,6 +547,56 @@ html[data-theme="dark"] .uploader-img { border-color: rgba(255,255,255,0.06); }
 .profile-footer .chat-actions { display:flex; }
 .profile-footer .btn { font-size:14px; }
 
+/* Ensure buttons inside profile panel are always readable */
+.profile-popover .btn.ghost,
+.profile-popover .btn.secondary { color: var(--text); border-color: color-mix(in srgb, var(--border) 80%, rgba(0,0,0,0.06)); }
+.profile-popover .btn.primary { color: #fff; }
+
+/* --- Accessibility & theme safety fixes --- */
+/* Neutralize modal/backdrop tint so content remains readable in any theme */
+.modal {
+  background: rgba(2,6,23,0.62) !important;
+}
+
+/* Ensure modal content and popovers use card/text variables for contrast */
+.modal-content,
+.profile-popover,
+.card,
+.upload,
+.view-modal-content,
+.panel-chat,
+#chatDrawer {
+  background: var(--card) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* Form controls visibility */
+input, textarea, select {
+  background: color-mix(in srgb, var(--bg) 96%, #ffffff) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+select { appearance: none; }
+option { background: var(--bg); color: var(--text); }
+
+/* Buttons that are ghost/secondary should remain visible */
+.btn.ghost, .btn.secondary, button.preset {
+  background: transparent !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* Primary button stronger contrast */
+.btn.primary, .btn.btn-primary { background: linear-gradient(90deg,var(--primary), var(--primary-hover)) !important; color: #fff !important; }
+
+/* Dropdowns in modals/popovers need higher z-index to show options above overlays */
+.modal-content select, .profile-popover select, select { z-index: 3000; }
+
+/* Small fix: ensure inputs inside panels use full contrast */
+.panel-chat-compose input, .profile-body textarea { background: color-mix(in srgb, var(--bg) 96%, #ffffff) !important; color: var(--text) !important; }
+
+
 
 .panel-chat { border-top:1px solid var(--border); padding-top:8px; }
 .panel-chat-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
@@ -567,10 +618,10 @@ html[data-theme="dark"] .uploader-img { border-color: rgba(255,255,255,0.06); }
 .drop-area.dragover { box-shadow: 0 8px 30px rgba(99,102,241,0.12); transform:translateY(-4px); border-color: color-mix(in srgb, var(--primary) 40%, var(--muted)); }
 .drop-content strong { display:block; font-size:15px; color:var(--text); margin-bottom:6px; }
 .drop-content .muted { display:block; margin:8px 0; color:var(--muted); }
-.btn { padding:10px 14px; border-radius:10px; border:0; cursor:pointer; font-weight:600; }
-.btn.primary { background: linear-gradient(90deg,var(--primary), color-mix(in srgb, var(--primary) 60%, #ffffff)); color:#fff; box-shadow: var(--shadow-sm); }
-.btn.secondary { background: transparent; border:1px solid var(--border); color:var(--text); }
-.btn.ghost { background:transparent; border:1px dashed var(--border); color:var(--muted); }
+.btn { padding:10px 14px; border-radius:10px; border:0; cursor:pointer; font-weight:600; color:var(--text); background: transparent; }
+.btn.primary { background: linear-gradient(90deg,var(--primary), color-mix(in srgb, var(--primary) 60%, var(--primary-hover))); color:#fff; box-shadow: var(--shadow-sm); }
+.btn.secondary { background: transparent; border:1px solid color-mix(in srgb, var(--border) 85%, rgba(0,0,0,0.06)); color:var(--text); }
+.btn.ghost { background:transparent; border:1px dashed color-mix(in srgb, var(--border) 85%, rgba(0,0,0,0.06)); color:var(--text); }
 
 .upload-preview { display:flex; flex-direction:column; gap:8px; max-height:220px; overflow:auto; padding:6px; }
 .preview-item { display:flex; gap:10px; align-items:center; padding:8px; border-radius:8px; background: color-mix(in srgb, var(--bg) 98%, transparent); border:1px solid color-mix(in srgb, var(--border) 80%, transparent); }
@@ -634,15 +685,15 @@ html[data-theme="dark"] .uploader-img { border-color: rgba(255,255,255,0.06); }
 }
 
 .modal-content { 
-  background: color-mix(in srgb, var(--bg) 95%, transparent);
+  background: color-mix(in srgb, var(--card) 94%, rgba(255,255,255,0.02));
   color: var(--text); 
   padding: var(--space-xl);
   border-radius: var(--radius-xl);
   width: 100%; 
   max-width: 540px;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border) 85%, rgba(0,0,0,0.05));
   box-shadow: var(--shadow-xl);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(10px);
   animation: modalSlideIn 0.3s ease;
   max-height: 90vh;
   overflow-y: auto;
