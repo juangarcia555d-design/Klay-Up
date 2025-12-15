@@ -244,11 +244,15 @@ export async function addPhoto(req, res) {
           url,
           is_public: true
         };
-        // Asociar user_id SOLO si la subida es desde el perfil (scope==='profile')
+        // Asociar `user_id` si el usuario está autenticado.
+        // Antes asociábamos solo cuando scope === 'profile', eso hacía que las subidas desde el index
+        // no tuvieran `user_id` y por tanto no mostraran el uploader en la galería. Ahora siempre
+        // preservamos la relación con el usuario autenticado (seguimos marcando `is_public=false`
+        // cuando la subida es de perfil).
         try {
-          if (authUserId && scope === 'profile') {
+          if (authUserId) {
             payload.user_id = authUserId;
-            payload.is_public = false;
+            if (scope === 'profile') payload.is_public = false;
           }
         } catch (e) { /* ignore */ }
       console.log('DB payload:', payload);
