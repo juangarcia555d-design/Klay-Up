@@ -161,7 +161,7 @@ h1 {
   max-width: 420px;
   width: auto;
   display: block;
-  z-index: 60;
+  z-index: 40;
 }
 
 /* ========== BOTONES MEJORADOS ========== */
