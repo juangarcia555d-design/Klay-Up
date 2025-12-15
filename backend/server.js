@@ -141,19 +141,25 @@ app.get('/u/:id', async (req, res) => {
 
     const viewerIsOwner = viewerId && Number(viewerId) === Number(id);
 
-    // si el visitante es el dueño, mostramos todas; si no, solo fotos públicas
-        let photosData = [];
-        try {
-          const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', id).order('created_at', { ascending: false });
-          photosData = data || [];
-        } catch (e) {
-          // si la columna is_public no existe en la DB, fall back a seleccionar por user_id (mostramos igual los uploads del usuario)
-          try {
-            const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url').eq('user_id', id).order('created_at', { ascending: false });
-            photosData = data || [];
-          } catch (e2) {
-            photosData = [];
-          }
+    // si el visitante es el dueño, mostrar SOLO fotos de perfil (is_public = false)
+    // si no, mostrar SOLO fotos públicas (is_public = true)
+    let photosData = [];
+    try {
+      if (viewerIsOwner) {
+        const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', id).eq('is_public', false).order('created_at', { ascending: false });
+        photosData = data || [];
+      } else {
+        const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', id).eq('is_public', true).order('created_at', { ascending: false });
+        photosData = data || [];
+      }
+    } catch (e) {
+      // si la columna is_public no existe, caer al comportamiento anterior (mostrar por user_id)
+      try {
+        const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url').eq('user_id', id).order('created_at', { ascending: false });
+        photosData = data || [];
+      } catch (e2) {
+        photosData = [];
+      }
     }
 
     // obtener counts y si el viewer sigue al usuario
