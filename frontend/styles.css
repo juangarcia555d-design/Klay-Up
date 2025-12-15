@@ -654,7 +654,7 @@ option { background: var(--bg); color: var(--text); }
   font-size: 13px;
 }
 
-/* ========== MODALES RESPONSIVOS ========== */
+/* ========== MODALES RESPONSIVvOS ========== */
 .modal { 
   position: fixed; 
   inset: 0; 
