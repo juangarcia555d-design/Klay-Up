@@ -22,8 +22,8 @@
           <div class="muted"><%= user.email %></div>
           <p class="profile-desc"><%= user.profile_description || '' %></p>
           <div style="margin-top:8px;display:flex;gap:12px;align-items:center;">
-            <div style="font-weight:600;cursor:pointer;" id="followerCount">Seguidores: <span id="followerNum"><%= typeof followerCount !== 'undefined' ? followerCount : 0 %></span></div>
-            <div style="font-weight:600;cursor:pointer;" id="followingCount">Siguiendo: <span id="followingNum"><%= typeof followingCount !== 'undefined' ? followingCount : 0 %></span></div>
+            <div style="font-weight:600;cursor:pointer;" id="followerCount">Seguidores: <span id="profileFollowerNum"><%= typeof followerCount !== 'undefined' ? followerCount : 0 %></span></div>
+            <div style="font-weight:600;cursor:pointer;" id="followingCount">Siguiendo: <span id="profileFollowingNum"><%= typeof followingCount !== 'undefined' ? followingCount : 0 %></span></div>
           </div>
           <div class="profile-actions">
             <% if (typeof isOwner !== 'undefined' && isOwner) { %>
@@ -84,36 +84,29 @@
     </section>
   </main>
 
-  <!-- Chat drawer (fixed bottom) -->
-  <div id="chatDrawer" style="position:fixed;right:16px;bottom:16px;width:360px;max-width:calc(100% - 32px);background:var(--bg);color:var(--text);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.2);display:none;flex-direction:column;overflow:hidden;z-index:9999">
-    <div style="padding:8px 12px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between">
-      <div id="chatTitle" style="font-weight:700">Chat</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button id="chatClose" class="btn">Cerrar</button>
-      </div>
-    </div>
+  <!-- Panel chat & inbox (reused from index) -->
+  <div id="panelInboxBubbles" class="panel-bubbles" style="display:none;gap:8px;align-items:center;padding:6px"></div>
+  <div id="panelChat" class="panel-chat hidden" style="display:none">
+    <div class="panel-chat-header"><div id="panelChatTitle">Chat</div><div><button id="panelBackToInbox" class="btn">← Bandeja</button><button id="panelCloseChat" class="btn">Cerrar</button></div></div>
+    <div id="panelChatBody" class="panel-chat-body"></div>
+    <div class="panel-chat-compose"><input id="panelChatInput" placeholder="Escribe un mensaje..." /><button id="panelChatSend" class="btn btn-primary">Enviar</button></div>
+  </div>
 
-    <!-- Avatar picker modal -->
-    <div id="avatarPickerModal" style="display:none;position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:100000"> 
-      <div style="max-width:680px;width:94%;background:var(--bg);color:var(--text);padding:12px;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.25);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <strong>Seleccionar avatar</strong>
-          <button id="closeAvatarPicker" class="btn">Cerrar</button>
-        </div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;max-height:48vh;overflow:auto;padding:6px" id="avatarList">Loading avatars...</div>
-        <hr style="margin:10px 0" />
-        <div style="display:flex;gap:8px;align-items:center">
-          <label style="font-weight:600">Subir avatar</label>
-          <input id="avatarFile" type="file" accept="image/*" />
-          <button id="avatarUploadBtn" class="btn btn-primary">Subir</button>
-          <div id="avatarUploadProgress" style="flex:1;display:none;margin-left:8px;height:8px;background:rgba(0,0,0,0.06);border-radius:8px;overflow:hidden"><div style="height:100%;width:0%;background:linear-gradient(90deg,#6b46c1,#7c3aed);transition:width 120ms linear"></div></div>
-        </div>
+  <!-- Avatar picker modal -->
+  <div id="avatarPickerModal" style="display:none;position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;z-index:100000"> 
+    <div style="max-width:680px;width:94%;background:var(--bg);color:var(--text);padding:12px;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong>Seleccionar avatar</strong>
+        <button id="closeAvatarPicker" class="btn">Cerrar</button>
       </div>
-    </div>
-    <div id="chatBody" style="padding:8px;max-height:320px;overflow:auto;background:transparent;display:flex;flex-direction:column;gap:8px"></div>
-    <div style="padding:8px;border-top:1px solid rgba(0,0,0,0.06);display:flex;gap:8px;align-items:center">
-      <input id="chatInput" placeholder="Escribe un mensaje..." style="flex:1;padding:8px;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:transparent;color:inherit" />
-      <button id="chatSend" class="btn btn-primary">Enviar</button>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;max-height:48vh;overflow:auto;padding:6px" id="avatarList">Loading avatars...</div>
+      <hr style="margin:10px 0" />
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="font-weight:600">Subir avatar</label>
+        <input id="avatarFile" type="file" accept="image/*" />
+        <button id="avatarUploadBtn" class="btn btn-primary">Subir</button>
+        <div id="avatarUploadProgress" style="flex:1;display:none;margin-left:8px;height:8px;background:rgba(0,0,0,0.06);border-radius:8px;overflow:hidden"><div style="height:100%;width:0%;background:linear-gradient(90deg,#6b46c1,#7c3aed);transition:width 120ms linear"></div></div>
+      </div>
     </div>
   </div>
 
@@ -125,7 +118,7 @@
   <script>
     (function(){
       const followBtn = document.getElementById('followBtn');
-      const profileUserId = '<%= user.id %>';
+      function getProfileUserId(){ try { if (typeof window !== 'undefined' && window.profilePageUserId) return String(window.profilePageUserId); const el = document.getElementById('profileData'); return el ? el.dataset.userid : ''; } catch(e){ return ''; } }
       if (followBtn) {
         followBtn.addEventListener('click', async () => {
           try {
@@ -133,7 +126,7 @@
             let action = 'follow';
             if (current === 'Siguiendo' || current.toLowerCase() === 'siguiendo') action = 'unfollow';
 
-            const endpoint = `/api/users/${profileUserId}/${action}`;
+            const endpoint = `/api/users/${getProfileUserId()}/${action}`;
             const res = await fetch(endpoint, { method: 'POST', credentials: 'include' });
             if (!res.ok) {
               const j = await res.json().catch(()=>null);
@@ -143,8 +136,8 @@
 
             const data = await res.json();
             // actualizar contadores si vienen
-            if (typeof data.followerCount !== 'undefined') document.getElementById('followerNum').textContent = data.followerCount || 0;
-            if (typeof data.followingCount !== 'undefined') document.getElementById('followingNum').textContent = data.followingCount || 0;
+            if (typeof data.followerCount !== 'undefined') document.getElementById('profileFollowerNum').textContent = data.followerCount || 0;
+            if (typeof data.followingCount !== 'undefined') document.getElementById('profileFollowingNum').textContent = data.followingCount || 0;
 
             // actualizar etiqueta
             if (action === 'follow') followBtn.textContent = 'Siguiendo';
@@ -154,23 +147,42 @@
       }
 
       const followerCountEl = document.getElementById('followerCount');
+      // Helper: escape HTML and show a single modal (will remove any existing one to avoid stacking)
+      function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, (c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c] || c)); }
+      // Helper to show a single modal (will remove any existing one to avoid stacking)
+      function showListModal(titleText, innerHtml) {
+        try {
+          const existing = document.getElementById('profileListModal');
+          if (existing) existing.remove();
+        } catch(e){}
+        try {
+          const modal = document.createElement('div');
+          modal.id = 'profileListModal';
+          modal.style.position = 'fixed'; modal.style.left='0'; modal.style.top='0'; modal.style.right='0'; modal.style.bottom='0'; modal.style.background='rgba(0,0,0,0.4)'; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center'; modal.style.zIndex='100000';
+          modal.innerHTML = `<div style="max-width:420px;width:90%;background:var(--bg);color:var(--text);padding:12px;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.2)"><div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'><strong>${escapeHtml(titleText||'Lista')}</strong><button id='closeProfileListModal'>Cerrar</button></div><div style='max-height:60vh;overflow:auto'>${innerHtml || '<div class="muted">Sin resultados</div>'}</div></div>`;
+          document.body.appendChild(modal);
+          const btn = modal.querySelector('#closeProfileListModal'); if (btn) btn.addEventListener('click', ()=>modal.remove());
+          try { window.showListModal = showListModal; } catch(e){}
+        } catch(e){ console.error('showListModal error', e); }
+      }
+
       if (followerCountEl) {
         followerCountEl.addEventListener('click', async () => {
           try {
-            const res = await fetch(`/api/users/${profileUserId}/followers`);
-            if (!res.ok) {
-              const j = await res.json().catch(()=>null); alert((j&&j.error)?j.error:'Error'); return;
-            }
+            const profileUserIdLocal = getProfileUserId();
+            console.debug('[diag] fetching followers for profileUserId ->', profileUserIdLocal);
+            const res = await fetch(`/api/users/${profileUserIdLocal}/followers`);
+            console.debug('[diag] followers response status ->', res && res.status);
+            if (!res.ok) { const j = await res.json().catch(()=>null); console.debug('[diag] followers error json ->', j); alert((j&&j.error)?j.error:'Error'); return; }
             const j = await res.json();
-            const list = (j.data || []).map(item => {
+            console.debug('[diag] followers payload ->', j);
+            const listArr = (j.data || []);
+            console.debug('[diag] followers count payload length ->', listArr.length, 'apiCount:', j.count);
+            const list = listArr.map(item => {
               const u = item.user || item || {};
-              return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div>${u.full_name||u.email||u.id}</div></div>`;
+              return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${escapeHtml(u.full_name||u.email||u.id)}</a></div></div>`;
             }).join('');
-            const modal = document.createElement('div');
-            modal.style.position = 'fixed'; modal.style.left='0'; modal.style.top='0'; modal.style.right='0'; modal.style.bottom='0'; modal.style.background='rgba(0,0,0,0.4)'; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center';
-            modal.innerHTML = `<div style="max-width:420px;width:90%;background:var(--bg);color:var(--text);padding:12px;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.2)"><div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'><strong>Seguidores</strong><button id='closeModal'>Cerrar</button></div><div style='max-height:60vh;overflow:auto'>${list || '<div class="muted">No tiene seguidores</div>'}</div></div>`;
-            document.body.appendChild(modal);
-            modal.querySelector('#closeModal').addEventListener('click', ()=>modal.remove());
+            showListModal('Seguidores', list || '<div class="muted">No tiene seguidores</div>');
           } catch (e) { console.error(e); alert('Error al obtener seguidores'); }
         });
       }
@@ -179,114 +191,27 @@
       if (followingCountEl) {
         followingCountEl.addEventListener('click', async () => {
           try {
-            const res = await fetch(`/api/users/${profileUserId}/following`);
-            if (!res.ok) {
-              const j = await res.json().catch(()=>null); alert((j&&j.error)?j.error:'Error'); return;
-            }
+            const profileUserIdLocal = getProfileUserId();
+            console.debug('[diag] fetching following for profileUserId ->', profileUserIdLocal);
+            const res = await fetch(`/api/users/${profileUserIdLocal}/following`);
+            console.debug('[diag] following response status ->', res && res.status);
+            if (!res.ok) { const j = await res.json().catch(()=>null); console.debug('[diag] following error json ->', j); alert((j&&j.error)?j.error:'Error'); return; }
             const j = await res.json();
-            const list = (j.data || []).map(item => {
+            console.debug('[diag] following payload ->', j);
+            const listArr = (j.data || []);
+            console.debug('[diag] following payload length ->', listArr.length, 'apiCount:', j.count);
+            const list = listArr.map(item => {
               const u = item.user || item || {};
-              return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div>${u.full_name||u.email||u.id}</div></div>`;
+              return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${escapeHtml(u.full_name||u.email||u.id)}</a></div></div>`;
             }).join('');
-            const modal = document.createElement('div');
-            modal.style.position = 'fixed'; modal.style.left='0'; modal.style.top='0'; modal.style.right='0'; modal.style.bottom='0'; modal.style.background='rgba(0,0,0,0.4)'; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center';
-            modal.innerHTML = `<div style="max-width:420px;width:90%;background:var(--bg);color:var(--text);padding:12px;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.2)"><div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'><strong>Siguiendo</strong><button id='closeModal'>Cerrar</button></div><div style='max-height:60vh;overflow:auto'>${list || '<div class="muted">No sigue a nadie</div>'}</div></div>`;
-            document.body.appendChild(modal);
-            modal.querySelector('#closeModal').addEventListener('click', ()=>modal.remove());
+            showListModal('Siguiendo', list || '<div class="muted">No sigue a nadie</div>');
           } catch (e) { console.error(e); alert('Error al obtener la lista de seguidos'); }
         });
       }
     })();
   </script>
-  <script>
-    (function(){
-      // Variables
-      const profileUserId = '<%= user.id %>';
-      const currentUserId = '<%= typeof currentUserId !== "undefined" ? currentUserId : '' %>';
 
-      const chatDrawer = document.getElementById('chatDrawer');
-      const chatBody = document.getElementById('chatBody');
-      const chatTitle = document.getElementById('chatTitle');
-      const chatInput = document.getElementById('chatInput');
-      const chatSend = document.getElementById('chatSend');
-      const chatClose = document.getElementById('chatClose');
-
-      let chatWith = null; // userId we're chatting with
-      let pollTimer = null;
-
-      function renderMessages(messages) {
-        chatBody.innerHTML = '';
-        messages.forEach(m => {
-          const me = String(m.sender_id) === String(currentUserId);
-          const el = document.createElement('div');
-          el.style.display = 'flex';
-          el.style.justifyContent = me ? 'flex-end' : 'flex-start';
-          el.innerHTML = `<div style="max-width:78%;padding:8px;border-radius:8px;background:${me ? 'linear-gradient(90deg,#0ea5a0,#06b6d4)' : 'rgba(0,0,0,0.06)'};color:${me ? '#fff' : 'var(--text)'}">${escapeHtml(m.content)}<div style="font-size:10px;margin-top:6px;opacity:0.7;text-align:right">${(new Date(m.created_at)).toLocaleString()}</div></div>`;
-          chatBody.appendChild(el);
-        });
-        chatBody.scrollTop = chatBody.scrollHeight;
-      }
-
-      function escapeHtml(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-      async function loadConversation(withId) {
-        if (!withId) return;
-        try {
-          const res = await fetch(`/api/messages/conversation/${withId}`, { method: 'GET', credentials: 'include' });
-          if (!res.ok) return;
-          const j = await res.json();
-          const msgs = j.data || [];
-          renderMessages(msgs);
-        } catch (e) { console.error('loadConversation', e); }
-      }
-
-      async function sendMessage(toId, text) {
-        try {
-          if (!text || !toId) return;
-          const res = await fetch('/api/messages/send', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ to: toId, content: text }) });
-          if (!res.ok) {
-            const j = await res.json().catch(()=>null); alert((j&&j.error)?j.error:'Error enviando'); return;
-          }
-          // update conversation
-          await loadConversation(toId);
-        } catch (e) { console.error('sendMessage', e); }
-      }
-
-      function startPolling(withId) {
-        stopPolling();
-        pollTimer = setInterval(()=>{ loadConversation(withId); }, 2500);
-      }
-
-      function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-
-      // Open chat with given user
-      function openChat(withId, title) {
-        if (!currentUserId) { alert('Necesitas iniciar sesión para enviar mensajes'); return; }
-        chatWith = withId;
-        chatTitle.textContent = title || 'Chat';
-        chatDrawer.style.display = 'flex';
-        loadConversation(withId);
-        startPolling(withId);
-      }
-
-      // Close
-      chatClose.addEventListener('click', ()=>{ chatDrawer.style.display='none'; stopPolling(); });
-
-      // Send
-      chatSend.addEventListener('click', async ()=>{
-        const txt = chatInput.value && chatInput.value.trim();
-        if (!txt) return;
-        await sendMessage(chatWith || profileUserId, txt);
-        chatInput.value = '';
-      });
-
-      // Message button on profile
-      const msgBtn = document.getElementById('msgBtn');
-      if (msgBtn) msgBtn.addEventListener('click', ()=>{ openChat(profileUserId, '<%= user.full_name ? String(user.full_name).replace(/'/g, "\\'") : 'Usuario' %>'); });
-
-      // Inbox ahora se muestra en el panel de avatar (index) — se omite aquí
-    })();
-  </script>
+  
   <script>
     (function(){
       // avatar picker handlers
@@ -423,7 +348,116 @@
         });
       }
     })();
+    </script>
+  <!-- Global chat drawer (copiado de index) -->
+  <div id="chatDrawer" style="position:fixed;right:16px;bottom:16px;width:360px;max-width:calc(100% - 32px);background:var(--bg);color:var(--text);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.2);display:none;flex-direction:column;overflow:hidden;z-index:9999">
+    <div style="padding:8px 12px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between">
+      <div id="chatTitle" style="font-weight:700">Chat</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="chatClose" class="btn">Cerrar</button>
+      </div>
+    </div>
+    <div id="chatBody" style="padding:8px;max-height:320px;overflow:auto;background:transparent;display:flex;flex-direction:column;gap:8px"></div>
+    <div style="padding:8px;border-top:1px solid rgba(0,0,0,0.06);display:flex;gap:8px;align-items:center">
+      <input id="chatInput" placeholder="Escribe un mensaje..." style="flex:1;padding:8px;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:transparent;color:inherit" />
+      <button id="chatSend" class="btn btn-primary">Enviar</button>
+    </div>
+  </div>
+  <script>
+    // Exponer id del perfil que se está viendo PARA que app.js lo lea al inicializarse
+    try { window.profilePageUserId = '<%= user.id %>'; } catch(e){}
   </script>
-  <script src="app.js?v=<%= Date.now() %>"></script>
+  <div id="profileData" style="display:none"
+       data-userid="<%= user.id %>"
+       data-fullname="<%= (user && user.full_name) ? (''+user.full_name).replace(/"/g,'&quot;') : 'Usuario' %>"></div>
+  <script src="/app.js?v=<%= Date.now() %>"></script>
+  <script>
+    (function(){
+      try {
+        console.log('[diag] profile: DOM ready - checking chat functions...');
+        console.log('[diag] typeof openGlobalChat ->', typeof window.openGlobalChat);
+        console.log('[diag] typeof openPanelChat ->', typeof window.openPanelChat);
+        console.log('[diag] __openPanelChatRequests ->', window.__openPanelChatRequests);
+        Array.from(document.scripts || []).forEach(s=>{ try{ if (s.src) console.log('[diag] script loaded ->', s.src); } catch(e){} });
+        window.addEventListener('error', function(ev){ try{ console.error('[diag] window error ->', ev.message, ev.filename, ev.lineno, ev.error); }catch(e){} });
+        window.addEventListener('unhandledrejection', function(ev){ try{ console.error('[diag] unhandledrejection ->', ev.reason); }catch(e){} });
+      } catch (e) { console.error('[diag] init failure', e); }
+    })();
+  </script>
+  <script>
+    // Attach message button handler after app.js is loaded so window.openPanelChat/event listener exists
+    (function(){
+      const profileDataEl = document.getElementById('profileData');
+      const profileUserId = profileDataEl ? profileDataEl.dataset.userid : '';
+      const title = profileDataEl ? profileDataEl.dataset.fullname || 'Usuario' : 'Usuario';
+      // attach immediately (script loaded at end of body so DOM elements exist)
+      try {
+        const msgBtn = document.getElementById('msgBtn');
+        if (!msgBtn) return;
+        msgBtn.addEventListener('click', async ()=>{
+          try { console.debug('profile: mensaje click'); } catch(e){}
+          console.log('profile: message click -> request openPanelChat', {id: profileUserId, title});
+          // Intento primario: abrir el drawer global (comportamiento anterior). fallback a panel si no existe
+          try {
+            if (typeof window.openGlobalChat === 'function') { window.openGlobalChat(profileUserId, title); return; }
+          } catch (e) { console.warn('direct openGlobalChat call failed', e); }
+          try {
+            if (typeof window.openPanelChat === 'function') { window.openPanelChat(profileUserId, title); return; }
+          } catch (e) { console.warn('direct openPanelChat call failed', e); }
+
+          // Fallback: si no existe openPanelChat, intentar abrir manualmente el panel que insertamos
+          try {
+            const panelInboxEl = document.getElementById('panelInboxBubbles');
+            const panelChatEl = document.getElementById('panelChat');
+            const panelTitle = document.getElementById('panelChatTitle');
+            const panelBody = document.getElementById('panelChatBody');
+            const input = document.getElementById('panelChatInput');
+            const sendBtn = document.getElementById('panelChatSend');
+            if (panelInboxEl) panelInboxEl.style.display = 'none';
+            if (panelChatEl) {
+              panelChatEl.classList.remove('hidden');
+              panelChatEl.style.visibility = 'visible';
+              panelChatEl.style.display = 'block';
+            }
+            if (panelTitle) panelTitle.textContent = title || 'Chat';
+
+            // render simple messages helper
+            function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, (c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c)); }
+            function renderMessages(messages){ if (!panelBody) return; panelBody.innerHTML = ''; messages.forEach(m=>{ const me = String(m.sender_id) === String(window.currentUserId||''); const el = document.createElement('div'); el.style.display='flex'; el.style.justifyContent = me ? 'flex-end' : 'flex-start'; el.innerHTML = `<div style="max-width:80%;padding:8px;border-radius:8px;background:${me ? 'linear-gradient(90deg,#0ea5a0,#06b6d4)' : 'rgba(0,0,0,0.06)'};color:${me ? '#fff':'var(--text)'}">${(m.content?escapeHtml(m.content):'')}<div style="font-size:10px;margin-top:6px;opacity:0.7;text-align:right">${(m.created_at? (new Date(m.created_at)).toLocaleString(): '')}</div></div>`; panelBody.appendChild(el); }); panelBody.scrollTop = panelBody.scrollHeight; }
+
+            // load conversation once
+            try {
+              const res = await fetch(`${window.API_BASE || ''}/api/messages/conversation/${profileUserId}`, { credentials: 'include' });
+              if (res && res.ok) {
+                const j = await res.json().catch(()=>({}));
+                const msgs = (j && j.data) ? j.data : [];
+                renderMessages(msgs);
+              } else {
+                if (panelBody) panelBody.innerHTML = '<div class="muted">No se pudo cargar la conversación</div>';
+              }
+            } catch (e) { console.error('fallback load conversation', e); }
+
+            // wire send button in fallback
+            if (sendBtn) {
+              sendBtn.onclick = async () => {
+                const text = input && input.value && input.value.trim(); if (!text) return;
+                try {
+                  const r = await fetch(`${window.API_BASE || ''}/api/messages/send`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ to: profileUserId, content: text }) });
+                  if (!r.ok) { const jj = await r.json().catch(()=>null); alert((jj && jj.error) ? jj.error : 'Error enviando'); return; }
+                  if (input) input.value = '';
+                  // reload conversation
+                  try { const nr = await fetch(`${window.API_BASE || ''}/api/messages/conversation/${profileUserId}`, { credentials: 'include' }); if (nr && nr.ok) { const nj = await nr.json().catch(()=>null); if (nj && nj.data) renderMessages(nj.data); } } catch(e){}
+                } catch(e){ console.error('fallback send error', e); }
+              };
+            }
+            return;
+          } catch (e) { console.error('fallback opening panel failed', e); }
+
+          // último recurso: notificar al usuario
+          try { alert('No fue posible abrir el chat. Revisa la consola.'); } catch(e){}
+        });
+      } catch (e) { console.error('attach msgBtn handler error', e); }
+    })();
+  </script>
 </body>
 </html>

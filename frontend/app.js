@@ -3,6 +3,27 @@ const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API
 // Version stamp para confirmar que el cliente cargó la versión actual del archivo
 try { console.log('app.js loaded - ts:' + (new Date()).toISOString()); } catch (e) {}
 
+// Asegurar que las solicitudes para abrir el panel de chat se capturen
+// incluso si se disparan antes de que `DOMContentLoaded` registre los handlers.
+if (typeof window !== 'undefined') {
+  window.__openPanelChatRequests = window.__openPanelChatRequests || [];
+  // stub provisional que encola llamadas directas a openPanelChat antes de que la
+  // implementación real esté disponible dentro de DOMContentLoaded.
+  if (typeof window.openPanelChat !== 'function') {
+    window.openPanelChat = function(id, title) {
+      try { window.__openPanelChatRequests.push({ id: id, title: title }); } catch (e) {}
+    };
+  }
+  // Listener pasivo para capturar eventos `openPanelChatRequest` que se disparen
+  // antes de que el script principal haya terminado de inicializarse.
+  window.addEventListener('openPanelChatRequest', function(ev) {
+    try {
+      const d = ev && ev.detail ? ev.detail : null;
+      if (d && d.id) window.__openPanelChatRequests.push(d);
+    } catch (e) {}
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const tabs = document.querySelectorAll('.tab');
   const listTitle = document.getElementById('listTitle');
@@ -1194,10 +1215,130 @@ document.addEventListener('DOMContentLoaded', () => {
         const relRes = await fetch(`/api/users/${encodeURIComponent(user.id)}/relationship`, { credentials: 'include' });
         if (relRes && relRes.ok) {
           const relJson = await relRes.json();
-          const fEl = document.getElementById('followerCount');
-          const tEl = document.getElementById('followingCount');
-          if (fEl) fEl.textContent = (relJson && typeof relJson.followerCount !== 'undefined') ? String(relJson.followerCount) : '0';
-          if (tEl) tEl.textContent = (relJson && typeof relJson.followingCount !== 'undefined') ? String(relJson.followingCount) : '0';
+          const fCount = (relJson && typeof relJson.followerCount !== 'undefined') ? Number(relJson.followerCount) : 0;
+          const foCount = (relJson && typeof relJson.followingCount !== 'undefined') ? Number(relJson.followingCount) : 0;
+
+          // Variantes en las plantillas: index usa ids simples, profile usa ids con prefijo `profile`.
+          // Actualizar primero los span interiores si existen (varios templates soportados).
+          const profileFollowerEl = document.getElementById('profileFollowerNum');
+          const profileFollowingEl = document.getElementById('profileFollowingNum');
+
+          const followerNumEl = document.getElementById('followerNum');
+          const followingNumEl = document.getElementById('followingNum');
+
+          if (followerNumEl) followerNumEl.textContent = String(fCount);
+          else {
+            const fEl = document.getElementById('followerCount');
+            if (fEl) {
+              if (fEl.tagName && fEl.tagName.toLowerCase() === 'span') {
+                // span used directly on index panel — safe to write
+                fEl.textContent = String(fCount);
+              } else {
+                const child = fEl.querySelector && fEl.querySelector('span');
+                if (child) {
+                  // If the child is the profile-specific span, avoid overwriting it
+                  // unless the profile page refers to the current user.
+                  const isProfileSpan = child.id && String(child.id).indexOf('profile') === 0;
+                  try {
+                    const profilePageId = (typeof window.profilePageUserId !== 'undefined' && window.profilePageUserId !== null) ? String(window.profilePageUserId) : null;
+                    const currentId = (typeof window.currentUserId !== 'undefined' && window.currentUserId !== null) ? String(window.currentUserId) : null;
+                    if (isProfileSpan) {
+                      if (!profilePageId || profilePageId === currentId) child.textContent = String(fCount);
+                    } else {
+                      child.textContent = String(fCount);
+                    }
+                  } catch (e) { /* ignore */ }
+                } else fEl.textContent = String(fCount);
+              }
+            }
+          }
+
+          if (followingNumEl) followingNumEl.textContent = String(foCount);
+          else {
+            const tEl = document.getElementById('followingCount');
+            if (tEl) {
+              if (tEl.tagName && tEl.tagName.toLowerCase() === 'span') {
+                tEl.textContent = String(foCount);
+              } else {
+                const child2 = tEl.querySelector && tEl.querySelector('span');
+                if (child2) {
+                  const isProfileSpan2 = child2.id && String(child2.id).indexOf('profile') === 0;
+                  try {
+                    const profilePageId = (typeof window.profilePageUserId !== 'undefined' && window.profilePageUserId !== null) ? String(window.profilePageUserId) : null;
+                    const currentId = (typeof window.currentUserId !== 'undefined' && window.currentUserId !== null) ? String(window.currentUserId) : null;
+                    if (isProfileSpan2) {
+                      if (!profilePageId || profilePageId === currentId) child2.textContent = String(foCount);
+                    } else {
+                      child2.textContent = String(foCount);
+                    }
+                  } catch (e) { /* ignore */ }
+                } else tEl.textContent = String(foCount);
+              }
+            }
+          }
+
+          // Actualizar elementos específicos de la página de perfil SOLO si la página de perfil
+          // corresponde al usuario autenticado (o si no se especificó un profilePageUserId).
+          try {
+            const profilePageId = (typeof window.profilePageUserId !== 'undefined' && window.profilePageUserId !== null) ? String(window.profilePageUserId) : null;
+            const currentId = (typeof window.currentUserId !== 'undefined' && window.currentUserId !== null) ? String(window.currentUserId) : null;
+            if (profileFollowerEl) {
+              if (!profilePageId || profilePageId === currentId) profileFollowerEl.textContent = String(fCount);
+            }
+            if (profileFollowingEl) {
+              if (!profilePageId || profilePageId === currentId) profileFollowingEl.textContent = String(foCount);
+            }
+          } catch (e) { /* ignore */ }
+
+          // Attach click handlers to show modal lists (works for both template variants)
+          function makeModal(title, itemsHtml) {
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed'; modal.style.left = '0'; modal.style.top = '0'; modal.style.right = '0'; modal.style.bottom = '0'; modal.style.background = 'rgba(0,0,0,0.45)'; modal.style.display = 'flex'; modal.style.alignItems = 'center'; modal.style.justifyContent = 'center'; modal.style.zIndex = '1000000';
+            modal.innerHTML = `<div style="max-width:420px;width:90%;background:var(--bg);color:var(--text);padding:12px;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.2)"><div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'><strong>${title}</strong><button id='closeFollowModal' class='btn'>Cerrar</button></div><div style='max-height:60vh;overflow:auto'>${itemsHtml || '<div class="muted">Sin resultados</div>'}</div></div>`;
+            document.body.appendChild(modal);
+            const btn = modal.querySelector('#closeFollowModal'); if (btn) btn.addEventListener('click', ()=>{ try{ document.body.removeChild(modal); }catch(e){} });
+          }
+
+          async function showFollowersList() {
+            try {
+              const r = await fetch(`/api/users/${encodeURIComponent(user.id)}/followers`);
+              if (!r.ok) { const j = await r.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error'); return; }
+              const j = await r.json();
+              const listHtml = (j.data || []).map(item => { const u = item.user || item || {}; return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${u.full_name||u.email||u.id}</a></div></div>`; }).join('');
+              if (window.showListModal) window.showListModal('Seguidores', listHtml);
+              else makeModal('Seguidores', listHtml);
+            } catch (e) { console.error('showFollowersList error', e); alert('Error al obtener seguidores'); }
+          }
+
+          async function showFollowingList() {
+            try {
+              const r = await fetch(`/api/users/${encodeURIComponent(user.id)}/following`);
+              if (!r.ok) { const j = await r.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error'); return; }
+              const j = await r.json();
+              const listHtml = (j.data || []).map(item => { const u = item.user || item || {}; return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${u.full_name||u.email||u.id}</a></div></div>`; }).join('');
+              if (window.showListModal) window.showListModal('Siguiendo', listHtml);
+              else makeModal('Siguiendo', listHtml);
+            } catch (e) { console.error('showFollowingList error', e); alert('Error al obtener la lista de seguidos'); }
+          }
+
+          // bind clicks to any available element variants
+          try {
+            // Si estamos en la página dedicada de perfil (profile.ejs), esa plantilla
+            // ya adjunta sus propios handlers y gestión; evitar adjuntar handlers
+            // duplicados desde app.js para prevenir comportamientos intermitentes.
+            if (typeof window.profilePageUserId === 'undefined') {
+              const els = [];
+              const cand1 = document.getElementById('followerCount'); if (cand1) els.push({el:cand1, fn: showFollowersList});
+              const cand2 = document.getElementById('followerNum'); if (cand2) els.push({el:cand2, fn: showFollowersList});
+              els.forEach(o => { try { o.el.style.cursor = 'pointer'; o.el.addEventListener('click', o.fn); } catch(e){} });
+              const els2 = [];
+              const tc1 = document.getElementById('followingCount'); if (tc1) els2.push({el:tc1, fn: showFollowingList});
+              const tc2 = document.getElementById('followingNum'); if (tc2) els2.push({el:tc2, fn: showFollowingList});
+              els2.forEach(o => { try { o.el.style.cursor = 'pointer'; o.el.addEventListener('click', o.fn); } catch(e){} });
+            } else {
+              // En la página profile.ejs, respetar los handlers locales y no adjuntar nada aquí.
+            }
+          } catch(e) { /* ignore handler attach errors */ }
         }
       } catch (e) { /* ignore relationship fetch errors */ }
       if (avatarLarge) {
@@ -1540,6 +1681,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let panelBubblesInFlight = false;
   async function openPanelChat(withId, title) {
     try {
+      try { console.log('[chat] openPanelChat called ->', withId, title); } catch(e){}
       // esconder bandeja y mostrar chat
       const panelInboxEl = document.getElementById('panelInboxBubbles');
       const panelChat = document.getElementById('panelChat');
@@ -1551,7 +1693,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const closeBtn = document.getElementById('panelCloseChat');
       if (!panelChat || !panelBody) return;
       if (panelInboxEl) panelInboxEl.style.display = 'none';
-      panelChat.style.display = 'block';
+      if (panelChat) {
+        panelChat.classList.remove('hidden');
+        panelChat.style.visibility = 'visible';
+        panelChat.style.display = 'block';
+      }
       if (panelTitle) panelTitle.textContent = title || 'Chat';
 
       // helper to render messages
@@ -1613,6 +1759,35 @@ document.addEventListener('DOMContentLoaded', () => {
       startPanelPoll();
     } catch (e) { console.error('openPanelChat error', e); }
   }
+
+  // expose and event-bridge: allow other pages to request opening the panel
+  try {
+    if (typeof window !== 'undefined') {
+      window.openPanelChat = openPanelChat;
+      window.__openPanelChatRequests = window.__openPanelChatRequests || [];
+      window.addEventListener('openPanelChatRequest', (ev) => {
+        try {
+          const d = ev && ev.detail ? ev.detail : null;
+          try { console.log('[chat] openPanelChatRequest received', d); } catch(e){}
+          if (!d || !d.id) return;
+          if (typeof openPanelChat === 'function') {
+            openPanelChat(d.id, d.title);
+          } else {
+            window.__openPanelChatRequests.push(d);
+            try { console.log('[chat] openPanelChatRequest queued', d); } catch(e){}
+          }
+        } catch (e) { console.error('openPanelChatRequest handler error', e); }
+      });
+      // process queued
+      try {
+        if (Array.isArray(window.__openPanelChatRequests) && window.__openPanelChatRequests.length) {
+          try { console.log('[chat] processing queued openPanelChatRequests', window.__openPanelChatRequests); } catch(e){}
+          window.__openPanelChatRequests.forEach(d=>{ try{ openPanelChat(d.id,d.title); }catch(e){console.error(e);} });
+          window.__openPanelChatRequests = [];
+        }
+      } catch(e){}
+    }
+  } catch (e) { /* ignore */ }
 
   // Refresh helpers
   async function refreshUnreadBadge() {
@@ -2116,6 +2291,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (gchatInput) gchatInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (gchatSend) gchatSend.click(); } };
     if (gchatClose) gchatClose.onclick = () => { gchatDrawer.style.display = 'none'; stopGPoll(); try { if (miniChatContainer) miniChatContainer.style.display = 'flex'; } catch(e){} try { if (sideContainer) sideContainer.querySelectorAll('.side-bubble.active').forEach(b=>b.classList.remove('active')); } catch(e){} };
   }
+
+  // Exponer openGlobalChat globalmente para que otras páginas (profile) puedan invocarlo
+  try {
+    if (typeof window !== 'undefined') window.openGlobalChat = openGlobalChat;
+  } catch (e) { /* ignore */ }
 
   function stopGPoll(){ if (gpoll) { clearInterval(gpoll); gpoll = null; } }
 
