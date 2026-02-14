@@ -34,7 +34,7 @@
 }
 
 html[data-theme="dark"] {
-  --bg: #0b0f1a;
+  --bg: #141414;
   --text: #e5e7eb;
   --muted: #9ca3af;
   --primary: #6366f1;
@@ -59,7 +59,7 @@ body {
   font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 92%, #0000) 100%);
+  background: var(--bg);
   color: var(--text);
   transition: background-color var(--transition-normal), color var(--transition-normal);
   min-height: 100vh;
@@ -534,9 +534,20 @@ main {
   z-index: 10;
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
-.uploader-badge .uploader-left { display:flex; align-items:center; gap:10px; }
+.uploader-badge .uploader-left { display:flex; align-items:center; gap:10px; min-width:0; }
 .uploader-img { width:32px; height:32px; border-radius:50%; object-fit:cover; border:1px solid rgba(0,0,0,0.06); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-.uploader-name { font-weight:700; color:var(--text) !important; font-size:14px; display:inline-block; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.uploader-name {
+  font-weight:700;
+  color:var(--text) !important;
+  font-size:14px;
+  display:block;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
 .uploader-name:hover { text-decoration:underline; color: color-mix(in srgb, var(--primary) 70%, var(--text)); }
 .uploader-right { display:flex; align-items:center; gap:8px; }
 .uploader-badge button.small { padding:6px 10px; font-size:13px; border-radius:8px; background: transparent; color:var(--text) !important; border:1px solid color-mix(in srgb, var(--border) 70%, rgba(0,0,0,0.06)) !important; }
@@ -604,6 +615,39 @@ html[data-theme="dark"] .uploader-img { border-color: rgba(255,255,255,0.06); }
   .comments-list { max-height: 180px; }
   .comment-avatar { width:34px; height:34px; }
   .comment-head { gap:6px; }
+
+  /* Mobile: tighter card layout and control placement */
+  .card-body { padding: 12px; }
+  .card-title { font-size: 15px; }
+  .card-desc, .card-date, .card-cat { font-size: 13px; }
+  .card { border-radius: 12px; }
+  .card-img { height: 160px; }
+  /* ensure ellipsis sits over the image corner and does not overflow */
+  .card-ellipsis { top: 8px; right: 8px; width: 30px; height: 28px; font-size: 16px; }
+  .card-ellipsis-menu { right: 8px; top: 40px; min-width: 100px; }
+
+  /* full-screen friendly panel chat on mobile */
+  .panel-chat {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    top: 64px !important;
+    bottom: 8px !important;
+    width: auto !important;
+    max-width: none !important;
+    z-index: 120000 !important;
+    border-radius: 12px !important;
+    padding: 8px !important;
+    background: var(--card) !important;
+    display: flex !important;
+    flex-direction: column;
+  }
+  .panel-chat-header { padding: 6px 4px; }
+  .panel-chat-body { height: calc(60vh); overflow:auto; padding:8px; }
+  .panel-chat-compose { margin-top: 8px; }
+
+  /* chatDrawer should use full width with margin on mobile */
+  #chatDrawer { left: 8px !important; right: 8px !important; width: auto !important; bottom: 16px !important; max-width: calc(100% - 16px) !important; }
 }
 
 /* Dark theme tweaks for comments */
@@ -641,7 +685,9 @@ html[data-theme="dark"] .comment-row { background: color-mix(in srgb, var(--card
   flex-direction: column;
   gap: 6px;
   min-width: 110px;
-  z-index: 9999;
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
+  z-index: 120000;
 }
 .ellipsis-menu.hidden { display: none; }
 .ellipsis-menu .menu-item {
@@ -658,7 +704,7 @@ html[data-theme="dark"] .comment-row { background: color-mix(in srgb, var(--card
 /* reuse for card-level ellipsis */
 .card-ellipsis { all: unset; display:inline-flex; align-items:center; justify-content:center; width:34px; height:30px; border-radius:8px; cursor:pointer; color:var(--muted); position: absolute; top: 10px; right: 10px; z-index: 60; background: rgba(255,255,255,0.02); }
 .card-ellipsis:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); color:var(--text); }
-.card-ellipsis-menu { position: absolute; top: 44px; right: 10px; background:var(--card); border:1px solid var(--border); box-shadow:var(--shadow-md); border-radius:8px; padding:6px; display:flex; flex-direction:column; gap:6px; min-width:120px; z-index:9999; }
+.card-ellipsis-menu { position: absolute; top: 44px; right: 10px; background:var(--card); border:1px solid var(--border); box-shadow:var(--shadow-md); border-radius:8px; padding:6px; display:flex; flex-direction:column; gap:6px; min-width:120px; z-index:120000; box-sizing: border-box; max-width: calc(100vw - 24px); }
 .card-ellipsis-menu.hidden { display:none; }
 .card-ellipsis-menu .menu-item { background:transparent; border:none; text-align:left; padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--text); }
 .card-ellipsis-menu .menu-item:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }

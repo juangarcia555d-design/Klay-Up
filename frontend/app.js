@@ -634,11 +634,16 @@ document.addEventListener('DOMContentLoaded', () => {
           menu.appendChild(miEdit); menu.appendChild(miDel);
           actionsContainer.appendChild(ell); actionsContainer.appendChild(menu);
         }
-        // interactions
-        ell.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); const isHidden = menu.classList.contains('hidden'); document.querySelectorAll('.card-ellipsis-menu').forEach(m=>m.classList.add('hidden')); if (isHidden) menu.classList.remove('hidden'); else menu.classList.add('hidden'); });
-        miEdit && miEdit.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); menu.classList.add('hidden'); openEdit(items[0]); });
-        miDel && miDel.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); menu.classList.add('hidden'); deletePhoto(items[0].id); });
-        document.addEventListener('click', (ev) => { if (!menu.contains(ev.target) && !ell.contains(ev.target)) menu.classList.add('hidden'); });
+        // interactions (use floating helpers to avoid clipping by parents)
+        ell.addEventListener('click', (ev) => {
+          ev.preventDefault(); ev.stopPropagation();
+          const isHidden = menu.classList.contains('hidden');
+          document.querySelectorAll('.ellipsis-menu, .card-ellipsis-menu').forEach(m=>{ try{ hideFloatingMenu(m); }catch(e){} });
+          if (isHidden) showFloatingMenu(menu, ell); else hideFloatingMenu(menu);
+        });
+        miEdit && miEdit.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); hideFloatingMenu(menu); openEdit(items[0]); });
+        miDel && miDel.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); hideFloatingMenu(menu); deletePhoto(items[0].id); });
+        document.addEventListener('click', (ev) => { if (!menu.contains(ev.target) && !ell.contains(ev.target)) hideFloatingMenu(menu); });
       }
     } catch (e) { /* ignore ownership errors and keep safe defaults */ }
 
@@ -786,7 +791,18 @@ document.addEventListener('DOMContentLoaded', () => {
         menu.appendChild(miEdit); menu.appendChild(miDel);
         actionsContainer.appendChild(ell); actionsContainer.appendChild(menu);
       }
-      ell.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); const isHidden = menu.classList.contains('hidden'); document.querySelectorAll('.card-ellipsis-menu').forEach(m=>m.classList.add('hidden')); if (isHidden) menu.classList.remove('hidden'); else menu.classList.add('hidden'); });
+      ell.addEventListener('click', (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        const isHidden = menu.classList.contains('hidden');
+        document.querySelectorAll('.ellipsis-menu, .card-ellipsis-menu').forEach(m=>m.classList.add('hidden'));
+        if (isHidden) {
+          menu.classList.remove('hidden');
+          adjustFloatingMenu(menu, ell);
+        } else {
+          menu.classList.add('hidden');
+          menu.style.position=''; menu.style.left=''; menu.style.top=''; menu.style.right='';
+        }
+      });
       miEdit && miEdit.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); menu.classList.add('hidden'); openEdit(item); });
       miDel && miDel.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); menu.classList.add('hidden'); deletePhoto(item.id); });
       document.addEventListener('click', (ev) => { if (!menu.contains(ev.target) && !ell.contains(ev.target)) menu.classList.add('hidden'); });
@@ -965,6 +981,94 @@ document.addEventListener('DOMContentLoaded', () => {
       return created;
     } catch (e) { console.error('postComment', e); throw e; }
   }
+  // Helper: position floating menus (ellipsis) so they never overflow the viewport.
+  // This positions the menu as `fixed` relative to the viewport using the anchor's
+  // bounding rect, flipping left/right or above/below if needed.
+  function adjustFloatingMenu(menu, anchor) {
+    try {
+      if (!menu || !anchor) return;
+      // ensure menu is measurable and constrained to viewport width
+      const margin = 8; // minimal margin to viewport edge
+      menu.classList.remove('hidden');
+      menu.style.visibility = 'hidden';
+      menu.style.position = 'fixed';
+      menu.style.right = 'auto';
+      menu.style.bottom = 'auto';
+      menu.style.left = '0px';
+      menu.style.top = '0px';
+      menu.style.maxWidth = Math.max(0, window.innerWidth - margin * 2) + 'px';
+
+      // measure, and if the menu is wider than available space, force a width and re-measure
+      let mRect = menu.getBoundingClientRect();
+      if (mRect.width > window.innerWidth - margin * 2) {
+        menu.style.width = String(Math.max(80, window.innerWidth - margin * 2)) + 'px';
+        mRect = menu.getBoundingClientRect();
+      }
+
+      const aRect = anchor.getBoundingClientRect();
+
+      // preferred placement: below the anchor, right-aligned to anchor.right
+      let left = Math.round(aRect.right - mRect.width);
+      let top = Math.round(aRect.bottom + 6);
+
+      // if left would overflow left edge, try aligning to anchor.left
+      if (left < margin) left = Math.round(aRect.left);
+      // ensure minimal margin
+      if (left < margin) left = margin;
+      // clamp right overflow
+      if (left + mRect.width > window.innerWidth - margin) left = Math.max(margin, window.innerWidth - mRect.width - margin);
+
+      // if not enough space below, flip above
+      if (top + mRect.height > window.innerHeight - margin) top = Math.round(aRect.top - mRect.height - 6);
+      if (top < margin) top = margin;
+
+      // apply final positions
+      menu.style.left = left + 'px';
+      menu.style.top = top + 'px';
+      menu.style.visibility = '';
+      // keep menu visible (callers may add 'hidden' to hide later)
+    } catch (e) { try { menu.style.position = ''; menu.style.left=''; menu.style.top=''; menu.classList.remove('hidden'); } catch(_){} }
+  }
+
+  // Show menu by moving it to document.body and positioning it.
+  function showFloatingMenu(menu, anchor) {
+    try {
+      if (!menu || !anchor) return;
+      // store original location so we can restore later
+      if (!menu.__origParent) {
+        menu.__origParent = menu.parentNode;
+        menu.__nextSibling = menu.nextSibling;
+      }
+      // ensure menu is on body so it's not clipped by ancestors with overflow/transform
+      if (menu.parentNode !== document.body) document.body.appendChild(menu);
+      menu.classList.remove('hidden');
+      // force high z-index
+      menu.style.zIndex = '130000';
+      adjustFloatingMenu(menu, anchor);
+    } catch (e) { console.error('showFloatingMenu error', e); }
+  }
+
+  function hideFloatingMenu(menu) {
+    try {
+      if (!menu) return;
+      menu.classList.add('hidden');
+      // reset inline positioning
+      menu.style.position = '';
+      menu.style.left = '';
+      menu.style.top = '';
+      menu.style.right = '';
+      menu.style.width = '';
+      menu.style.maxWidth = '';
+      menu.style.visibility = '';
+      menu.style.zIndex = '';
+      // restore original parent if needed
+      if (menu.__origParent) {
+        try {
+          menu.__origParent.insertBefore(menu, menu.__nextSibling || null);
+        } catch (e) {}
+      }
+    } catch (e) { console.error('hideFloatingMenu error', e); }
+  }
 
   function renderCommentsInto(container, comments) {
     try {
@@ -1051,22 +1155,24 @@ document.addEventListener('DOMContentLoaded', () => {
               });
             };
 
-            // menu interactions
+            // menu interactions (use helpers that move menu to body to avoid clipping)
             ell.addEventListener('click', (ev) => {
               ev.preventDefault(); ev.stopPropagation();
-              // toggle
               const isHidden = menu.classList.contains('hidden');
-              document.querySelectorAll('.ellipsis-menu').forEach(m=>m.classList.add('hidden'));
+              // hide other open menus (both comment and card menus)
+              document.querySelectorAll('.ellipsis-menu, .card-ellipsis-menu').forEach(m=>{ try{ hideFloatingMenu(m); }catch(e){} });
               if (isHidden) {
-                menu.classList.remove('hidden');
-              } else { menu.classList.add('hidden'); }
+                showFloatingMenu(menu, ell);
+              } else {
+                hideFloatingMenu(menu);
+              }
             });
 
-            miDel.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); menu.classList.add('hidden'); doDelete(); });
-            miEdit.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); menu.classList.add('hidden'); doEdit(); });
+            miDel.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); hideFloatingMenu(menu); doDelete(); });
+            miEdit.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); hideFloatingMenu(menu); doEdit(); });
 
             // close menu on outside click
-            document.addEventListener('click', (ev) => { if (!menu.contains(ev.target) && !ell.contains(ev.target)) menu.classList.add('hidden'); });
+            document.addEventListener('click', (ev) => { if (!menu.contains(ev.target) && !ell.contains(ev.target)) hideFloatingMenu(menu); });
           }
         } catch (e) { console.error('author check error', e); }
 
@@ -1943,6 +2049,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // helper to render messages
       function renderPanelMessages(messages) {
         if (!panelBody) return;
+        // preserve whether the user is near the bottom (auto-scroll behavior)
+        const prevScrollTop = panelBody.scrollTop;
+        const prevScrollHeight = panelBody.scrollHeight;
+        const clientH = panelBody.clientHeight || 0;
+        const distanceToBottom = prevScrollHeight - prevScrollTop - clientH;
+        const wasNearBottom = distanceToBottom < 120; // px threshold
+        // render
         panelBody.innerHTML = '';
         messages.forEach(m => {
           const me = String(m.sender_id) === String(window.currentUserId || '');
@@ -1952,7 +2065,14 @@ document.addEventListener('DOMContentLoaded', () => {
           el.innerHTML = `<div style="max-width:80%;padding:8px;border-radius:8px;background:${me ? 'linear-gradient(90deg,#0ea5a0,#06b6d4)' : 'rgba(0,0,0,0.06)'};color:${me ? '#fff':'var(--text)'}">${escapeHtml(m.content)}<div style="font-size:10px;margin-top:6px;opacity:0.7;text-align:right">${(new Date(m.created_at)).toLocaleString()}</div></div>`;
           panelBody.appendChild(el);
         });
-        panelBody.scrollTop = panelBody.scrollHeight;
+        // if user was near bottom, scroll to bottom; otherwise preserve relative position
+        if (wasNearBottom) {
+          panelBody.scrollTop = panelBody.scrollHeight;
+        } else {
+          const newScrollHeight = panelBody.scrollHeight;
+          // keep the same messages in view by adjusting scrollTop by the delta
+          panelBody.scrollTop = Math.max(0, prevScrollTop + (newScrollHeight - prevScrollHeight));
+        }
       }
 
       // load conversation once then enable polling
@@ -2471,6 +2591,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderGMessages(messages) {
     if (!gchatBody) return;
+    // preserve previous scroll state to avoid jumping when user is reading older messages
+    const prevScrollTop = gchatBody.scrollTop;
+    const prevScrollHeight = gchatBody.scrollHeight;
+    const clientH = gchatBody.clientHeight || 0;
+    const distanceToBottom = prevScrollHeight - prevScrollTop - clientH;
+    const wasNearBottom = distanceToBottom < 120;
     gchatBody.innerHTML = '';
     messages.forEach(m => {
       const me = (String(m.sender_id) === String(window.currentUserId || ''));
@@ -2483,7 +2609,12 @@ document.addEventListener('DOMContentLoaded', () => {
       el.innerHTML = `<div style="max-width:78%;padding:6px;border-radius:8px;background:${me ? 'linear-gradient(90deg,#0ea5a0,#06b6d4)' : 'rgba(0,0,0,0.06)'};color:${me ? '#fff' : 'var(--text)'}">${content}<div style="font-size:10px;margin-top:6px;opacity:0.7;text-align:right">${(new Date(m.created_at)).toLocaleString()}</div></div>`;
       gchatBody.appendChild(el);
     });
-    gchatBody.scrollTop = gchatBody.scrollHeight;
+    if (wasNearBottom) {
+      gchatBody.scrollTop = gchatBody.scrollHeight;
+    } else {
+      const newScrollHeight = gchatBody.scrollHeight;
+      gchatBody.scrollTop = Math.max(0, prevScrollTop + (newScrollHeight - prevScrollHeight));
+    }
   }
 
   async function loadGConversation(withId) {
