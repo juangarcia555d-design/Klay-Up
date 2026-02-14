@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { listPhotos, addPhoto, editPhoto, removePhoto, reactPhoto, unreactPhoto, getPhotoReactions, checkReactionsTable } from '../controllers/photoController.js';
+import { listPhotos, addPhoto, editPhoto, removePhoto, reactPhoto, unreactPhoto, getPhotoReactions, checkReactionsTable, listComments, addComment, editComment, removeComment } from '../controllers/photoController.js';
 
 const router = express.Router();
 // Aumentar límite de tamaño para permitir videos (ej. hasta 200MB)
@@ -20,5 +20,11 @@ router.delete('/:id/reaction', unreactPhoto);
 router.get('/:id/reactions', getPhotoReactions);
 // endpoint de diagnóstico
 router.get('/debug/reactions-table', checkReactionsTable);
+
+// Comentarios
+router.get('/:id/comments', listComments);
+router.post('/:id/comments', express.json(), addComment);
+router.put('/:id/comments/:cid', express.json(), editComment);
+router.delete('/:id/comments/:cid', removeComment);
 
 export default router;

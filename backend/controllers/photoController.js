@@ -13,6 +13,7 @@ import {
   getReactions,
   getUserReaction
 } from '../models/photoModel.js';
+import { createComment, getComments, getCommentById, updateComment as modelUpdateComment, deleteComment as modelDeleteComment } from '../models/photoModel.js';
 
 import jwt from 'jsonwebtoken';
 
@@ -177,6 +178,105 @@ export async function getPhotoReactions(req, res) {
   } catch (e) { console.error('getPhotoReactions error', e); return res.status(500).json({ error: e.message || 'Error interno' }); }
 }
 
+// GET /api/photos/:id/comments
+export async function listComments(req, res) {
+  try {
+    const photoId = Number(req.params.id);
+    const r = await getComments(photoId);
+    if (r.error) return res.status(500).json({ error: r.error.message || r.error });
+    const rows = r.data || [];
+    const userIds = Array.from(new Set(rows.map(c => c.user_id)));
+    let usersById = {};
+    if (userIds.length) {
+      const { data: users } = await supabase.from('usuarios').select('id,full_name,avatar_url').in('id', userIds);
+      usersById = (users || []).reduce((acc, u) => { acc[String(u.id)] = u; return acc; }, {});
+    }
+    const enhanced = rows.map(c => ({ ...c, user: usersById[String(c.user_id)] || null }));
+    return res.json(enhanced);
+  } catch (e) { console.error('listComments error', e); return res.status(500).json({ error: e.message || 'Error interno' }); }
+}
+
+// POST /api/photos/:id/comments
+export async function addComment(req, res) {
+  try {
+    const token = req.cookies?.session_token || null;
+    const secret = process.env.SESSION_SECRET || 'change_this_in_production';
+    if (!token) return res.status(401).json({ error: 'No autenticado' });
+    let payload;
+    try { payload = jwt.verify(token, secret); } catch (e) { return res.status(401).json({ error: 'Token inválido' }); }
+    const userId = payload?.userId;
+    if (!userId) return res.status(401).json({ error: 'No autenticado' });
+    const photoId = Number(req.params.id);
+    const { text } = req.body || {};
+    if (!text || String(text).trim() === '') return res.status(400).json({ error: 'Comentario vacío' });
+    const r = await createComment(photoId, userId, String(text).trim());
+    if (r.error) return res.status(500).json({ error: r.error.message || r.error });
+    // attach user info
+    let user = null;
+    try {
+      const { data: u } = await supabase.from('usuarios').select('id,full_name,avatar_url').eq('id', userId).limit(1).maybeSingle();
+      if (u) user = u;
+    } catch (e) {}
+    const created = { ...(r.data || r), user };
+    return res.status(201).json(created);
+  } catch (e) { console.error('addComment error', e); return res.status(500).json({ error: e.message || 'Error interno' }); }
+}
+
+// PUT /api/photos/:id/comments/:cid
+export async function editComment(req, res) {
+  try {
+    const token = req.cookies?.session_token || null;
+    const secret = process.env.SESSION_SECRET || 'change_this_in_production';
+    if (!token) return res.status(401).json({ error: 'No autenticado' });
+    let payload;
+    try { payload = jwt.verify(token, secret); } catch (e) { return res.status(401).json({ error: 'Token inválido' }); }
+    const userId = payload?.userId;
+    if (!userId) return res.status(401).json({ error: 'No autenticado' });
+
+    const commentId = Number(req.params.cid);
+    const { text } = req.body || {};
+    if (!text || String(text).trim() === '') return res.status(400).json({ error: 'Comentario vacío' });
+
+    const r = await getCommentById(commentId);
+    if (r.error) return res.status(500).json({ error: r.error.message || r.error });
+    const comment = r.data || null;
+    if (!comment) return res.status(404).json({ error: 'Comentario no encontrado' });
+    if (String(comment.user_id) !== String(userId)) return res.status(403).json({ error: 'No autorizado: no eres el autor del comentario' });
+
+    const u = await modelUpdateComment(commentId, String(text).trim());
+    if (u.error) return res.status(500).json({ error: u.error.message || u.error });
+    // attach user
+    let user = null;
+    try { const { data: uu } = await supabase.from('usuarios').select('id,full_name,avatar_url').eq('id', userId).limit(1).maybeSingle(); if (uu) user = uu; } catch (e) {}
+    const updated = { ...(u.data || u), user };
+    return res.json(updated);
+  } catch (e) { console.error('editComment error', e); return res.status(500).json({ error: e.message || 'Error interno' }); }
+}
+
+// DELETE /api/photos/:id/comments/:cid
+export async function removeComment(req, res) {
+  try {
+    const token = req.cookies?.session_token || null;
+    const secret = process.env.SESSION_SECRET || 'change_this_in_production';
+    if (!token) return res.status(401).json({ error: 'No autenticado' });
+    let payload;
+    try { payload = jwt.verify(token, secret); } catch (e) { return res.status(401).json({ error: 'Token inválido' }); }
+    const userId = payload?.userId;
+    if (!userId) return res.status(401).json({ error: 'No autenticado' });
+
+    const commentId = Number(req.params.cid);
+    const r = await getCommentById(commentId);
+    if (r.error) return res.status(500).json({ error: r.error.message || r.error });
+    const comment = r.data || null;
+    if (!comment) return res.status(404).json({ error: 'Comentario no encontrado' });
+    if (String(comment.user_id) !== String(userId)) return res.status(403).json({ error: 'No autorizado: no eres el autor del comentario' });
+
+    const del = await modelDeleteComment(commentId);
+    if (del.error) return res.status(500).json({ error: del.error.message || del.error });
+    return res.json({ ok: true });
+  } catch (e) { console.error('removeComment error', e); return res.status(500).json({ error: e.message || 'Error interno' }); }
+}
+
 // GET /api/photos/reactions/check -> comprobar si la tabla photo_reactions existe y es accesible
 export async function checkReactionsTable(req, res) {
   try {
@@ -308,6 +408,21 @@ export async function editPhoto(req, res) {
     const { id } = req.params;
     const { title, description, date_taken, category } = req.body;
 
+    // Verificar que el usuario autenticado sea el propietario de la foto
+    const token = req.cookies?.session_token || null;
+    const secret = process.env.SESSION_SECRET || 'change_this_in_production';
+    if (!token) return res.status(401).json({ error: 'No autenticado' });
+    let payload;
+    try { payload = jwt.verify(token, secret); } catch (e) { return res.status(401).json({ error: 'Token inválido' }); }
+    const userId = payload?.userId;
+    if (!userId) return res.status(401).json({ error: 'No autenticado' });
+
+    // comprobar propietario
+    const { data: existing, error: selErr } = await supabase.from('photos').select('user_id').eq('id', id).limit(1).maybeSingle();
+    if (selErr) return res.status(500).json({ error: selErr.message || selErr });
+    const ownerId = existing ? existing.user_id : null;
+    if (ownerId && String(ownerId) !== String(userId)) return res.status(403).json({ error: 'No autorizado: no eres el propietario' });
+
     const { data, error } = await updatePhoto(id, {
       title,
       description,
@@ -327,12 +442,36 @@ export async function removePhoto(req, res) {
   try {
     const { id } = req.params;
 
+    // Verificar que el usuario autenticado sea el propietario de la foto
+    const token = req.cookies?.session_token || null;
+    const secret = process.env.SESSION_SECRET || 'change_this_in_production';
+    if (!token) return res.status(401).json({ error: 'No autenticado' });
+    let payload;
+    try { payload = jwt.verify(token, secret); } catch (e) { return res.status(401).json({ error: 'Token inválido' }); }
+    const userId = payload?.userId;
+    if (!userId) return res.status(401).json({ error: 'No autenticado' });
+
+    // comprobar propietario
+    const { data: existing, error: selErr } = await supabase.from('photos').select('user_id, url').eq('id', id).limit(1).maybeSingle();
+    if (selErr) return res.status(500).json({ error: selErr.message || selErr });
+    const ownerId = existing ? existing.user_id : null;
+    if (ownerId && String(ownerId) !== String(userId)) return res.status(403).json({ error: 'No autorizado: no eres el propietario' });
+
     // Primero elimina el registro en la tabla
     const { error } = await deletePhoto(id);
     if (error) return res.status(500).json({ error: error.message });
 
     // Opcional: si guardas el path del archivo, aquí puedes llamar a removeFile(path)
-    // await removeFile(path);
+    // intentar eliminar el archivo del storage si la URL contiene el path
+    try {
+      if (existing && existing.url) {
+        // extraer nombre de archivo desde la URL pública (suponiendo formato estándar)
+        const url = existing.url || '';
+        const parts = url.split('/');
+        const filename = parts[parts.length - 1];
+        if (filename) await removeFile(filename);
+      }
+    } catch (e) { /* no criticar si falla la eliminación del archivo */ }
 
     res.json({ ok: true });
   } catch (e) {

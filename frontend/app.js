@@ -609,10 +609,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const cat = node.querySelector('.card-cat');
     if (cat) cat.textContent = items[0].category ? `Categoría: ${items[0].category}` : '';
 
-    const editBtn = node.querySelector('.edit');
-    if (editBtn) editBtn.addEventListener('click', () => openEdit(items[0]));
-    const delBtn = node.querySelector('.delete');
-    if (delBtn) delBtn.addEventListener('click', () => deletePhoto(items[0].id));
+    const actionsContainer = node.querySelector('.card-actions');
+    try {
+      const currentId = (typeof window.currentUserId !== 'undefined' && window.currentUserId !== null) ? String(window.currentUserId) : (window.currentUser && window.currentUser.id ? String(window.currentUser.id) : null);
+      const ownerId = (items[0] && items[0].uploader && items[0].uploader.id) ? String(items[0].uploader.id) : (items[0] && items[0].user_id ? String(items[0].user_id) : null);
+      const isOwner = ownerId && currentId && ownerId === currentId;
+      if (!actionsContainer) return;
+      if (!isOwner) {
+        // remove actions to non-owners
+        actionsContainer.parentNode && actionsContainer.parentNode.removeChild(actionsContainer);
+      } else {
+        // wire up ellipsis menu inside actionsContainer (or create if missing)
+        let ell = actionsContainer.querySelector('.card-ellipsis');
+        let menu = actionsContainer.querySelector('.card-ellipsis-menu');
+        let miEdit = actionsContainer.querySelector('.card-edit');
+        let miDel = actionsContainer.querySelector('.card-delete');
+        if (!ell || !menu) {
+          // create compact menu
+          actionsContainer.innerHTML = '';
+          ell = document.createElement('button'); ell.className = 'card-ellipsis no-shimmer'; ell.type = 'button'; ell.title = 'Más acciones'; ell.innerHTML = '⋯';
+          menu = document.createElement('div'); menu.className = 'card-ellipsis-menu hidden';
+          miEdit = document.createElement('button'); miEdit.className = 'menu-item card-edit'; miEdit.type = 'button'; miEdit.textContent = 'Editar';
+          miDel = document.createElement('button'); miDel.className = 'menu-item card-delete'; miDel.type = 'button'; miDel.textContent = 'Eliminar';
+          menu.appendChild(miEdit); menu.appendChild(miDel);
+          actionsContainer.appendChild(ell); actionsContainer.appendChild(menu);
+        }
+        // interactions
+        ell.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); const isHidden = menu.classList.contains('hidden'); document.querySelectorAll('.card-ellipsis-menu').forEach(m=>m.classList.add('hidden')); if (isHidden) menu.classList.remove('hidden'); else menu.classList.add('hidden'); });
+        miEdit && miEdit.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); menu.classList.add('hidden'); openEdit(items[0]); });
+        miDel && miDel.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); menu.classList.add('hidden'); deletePhoto(items[0].id); });
+        document.addEventListener('click', (ev) => { if (!menu.contains(ev.target) && !ell.contains(ev.target)) menu.classList.add('hidden'); });
+      }
+    } catch (e) { /* ignore ownership errors and keep safe defaults */ }
 
     // Mostrar uploader y reacciones como placa sobre la imagen (más atractiva)
     try {
@@ -688,6 +716,18 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {}
     if (opts.prepend) gallery.insertBefore(node, gallery.firstChild);
     else gallery.appendChild(node);
+
+    // Después de insertar, conectar la sección de comentarios (cargar existentes y bind al formulario)
+    try {
+      const added = opts.prepend ? gallery.firstElementChild : gallery.lastElementChild;
+      if (added) {
+        const cl = added.querySelector('.comments-list');
+        const cf = added.querySelector('.comment-form');
+        const pid = items && items[0] ? items[0].id : null;
+        if (cl && pid) fetchComments(pid).then(list => renderCommentsInto(cl, list)).catch(()=>{});
+        if (cf && pid) attachCommentHandler(cf, pid);
+      }
+    } catch (e) { /* ignore comment attach errors */ }
   }
 
   function renderCard(item, index, opts = {}) {
@@ -724,10 +764,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const cat = node.querySelector('.card-cat');
     if (cat) cat.textContent = item.category ? `Categoría: ${item.category}` : '';
 
-  const editBtn = node.querySelector('.edit');
-  if (editBtn) editBtn.addEventListener('click', () => openEdit(item));
-  const delBtn = node.querySelector('.delete');
-  if (delBtn) delBtn.addEventListener('click', () => deletePhoto(item.id));
+  const actionsContainer = node.querySelector('.card-actions');
+  try {
+    const currentId = (typeof window.currentUserId !== 'undefined' && window.currentUserId !== null) ? String(window.currentUserId) : (window.currentUser && window.currentUser.id ? String(window.currentUser.id) : null);
+    const ownerId = (item && item.uploader && item.uploader.id) ? String(item.uploader.id) : (item && item.user_id ? String(item.user_id) : null);
+    const isOwner = ownerId && currentId && ownerId === currentId;
+    if (!actionsContainer) return;
+    if (!isOwner) {
+      actionsContainer.parentNode && actionsContainer.parentNode.removeChild(actionsContainer);
+    } else {
+      let ell = actionsContainer.querySelector('.card-ellipsis');
+      let menu = actionsContainer.querySelector('.card-ellipsis-menu');
+      let miEdit = actionsContainer.querySelector('.card-edit');
+      let miDel = actionsContainer.querySelector('.card-delete');
+      if (!ell || !menu) {
+        actionsContainer.innerHTML = '';
+        ell = document.createElement('button'); ell.className = 'card-ellipsis no-shimmer'; ell.type = 'button'; ell.title = 'Más acciones'; ell.innerHTML = '⋯';
+        menu = document.createElement('div'); menu.className = 'card-ellipsis-menu hidden';
+        miEdit = document.createElement('button'); miEdit.className = 'menu-item card-edit'; miEdit.type = 'button'; miEdit.textContent = 'Editar';
+        miDel = document.createElement('button'); miDel.className = 'menu-item card-delete'; miDel.type = 'button'; miDel.textContent = 'Eliminar';
+        menu.appendChild(miEdit); menu.appendChild(miDel);
+        actionsContainer.appendChild(ell); actionsContainer.appendChild(menu);
+      }
+      ell.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); const isHidden = menu.classList.contains('hidden'); document.querySelectorAll('.card-ellipsis-menu').forEach(m=>m.classList.add('hidden')); if (isHidden) menu.classList.remove('hidden'); else menu.classList.add('hidden'); });
+      miEdit && miEdit.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); menu.classList.add('hidden'); openEdit(item); });
+      miDel && miDel.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); menu.classList.add('hidden'); deletePhoto(item.id); });
+      document.addEventListener('click', (ev) => { if (!menu.contains(ev.target) && !ell.contains(ev.target)) menu.classList.add('hidden'); });
+    }
+  } catch (e) { /* ignore ownership errors */ }
 
   // Mostrar uploader y reacciones como placa sobre la imagen (más atractiva)
   try {
@@ -823,6 +887,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (opts.prepend) gallery.insertBefore(node, gallery.firstChild);
     else gallery.appendChild(node);
+
+    // conectar sección de comentarios para la tarjeta simple
+    try {
+      const added = opts.prepend ? gallery.firstElementChild : gallery.lastElementChild;
+      if (added) {
+        const cl = added.querySelector('.comments-list');
+        const cf = added.querySelector('.comment-form');
+        const pid = item ? item.id : null;
+        if (cl && pid) fetchComments(pid).then(list => renderCommentsInto(cl, list)).catch(()=>{});
+        if (cf && pid) attachCommentHandler(cf, pid);
+      }
+    } catch (e) { /* ignore */ }
   }
 
   // Render simple skeleton placeholders to improve perceived load
@@ -866,6 +942,170 @@ document.addEventListener('DOMContentLoaded', () => {
       const j = await res.json();
       return j;
     } catch (e) { console.error('fetchPhotoReactions', e); return null; }
+  }
+
+  // Comentarios: obtener y publicar
+  async function fetchComments(photoId) {
+    try {
+      const res = await fetch(`${API_BASE}/api/photos/${photoId}/comments`);
+      if (!res.ok) return [];
+      const j = await res.json();
+      return Array.isArray(j) ? j : [];
+    } catch (e) { console.error('fetchComments', e); return []; }
+  }
+
+  async function postComment(photoId, text) {
+    try {
+      const res = await fetch(`${API_BASE}/api/photos/${photoId}/comments`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      if (!res.ok) {
+        const j = await res.json().catch(()=>null);
+        throw new Error((j && j.error) ? j.error : 'Error creando comentario');
+      }
+      const created = await res.json();
+      return created;
+    } catch (e) { console.error('postComment', e); throw e; }
+  }
+
+  function renderCommentsInto(container, comments) {
+    try {
+      container.innerHTML = '';
+      if (!comments || !comments.length) { container.innerHTML = '<div class="muted">Sé el primero en comentar</div>'; return; }
+      comments.slice(-20).forEach(c => {
+        const row = document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.alignItems='flex-start'; row.style.marginBottom='8px';
+        const img = document.createElement('img'); img.src = (c.user && c.user.avatar_url) ? c.user.avatar_url : '/imagen/default-avatar.png'; img.style.width='36px'; img.style.height='36px'; img.style.borderRadius='50%'; img.style.objectFit='cover'; img.style.cursor='pointer';
+        const meta = document.createElement('div'); meta.style.flex='1';
+        const head = document.createElement('div'); head.style.display='flex'; head.style.justifyContent='space-between'; head.style.alignItems='center';
+        const who = document.createElement('div'); who.style.fontWeight='700'; who.style.fontSize='13px'; who.textContent = (c.user && (c.user.full_name || c.user.email)) ? (c.user.full_name || c.user.email) : ('Usuario ' + (c.user && c.user.id ? c.user.id : ''));
+        const when = document.createElement('div'); when.style.fontSize='11px'; when.style.color='var(--muted)'; when.textContent = (c.created_at ? (new Date(c.created_at)).toLocaleString() : '');
+        const text = document.createElement('div'); text.style.marginTop='4px'; text.textContent = c.text || '';
+        const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px';
+
+        // link to profile on click
+        if (c.user && c.user.id) {
+          img.addEventListener('click', (e) => { e.stopPropagation(); window.location.href = '/u/' + encodeURIComponent(c.user.id); });
+          who.style.cursor = 'pointer'; who.addEventListener('click', (e) => { e.stopPropagation(); window.location.href = '/u/' + encodeURIComponent(c.user.id); });
+        }
+
+        // If the current user is the author, show Edit/Delete
+        try {
+          const currentId = (typeof window.currentUserId !== 'undefined' && window.currentUserId !== null) ? String(window.currentUserId) : (window.currentUser && window.currentUser.id ? String(window.currentUser.id) : null);
+          const authorId = c.user && c.user.id ? String(c.user.id) : (c.user_id ? String(c.user_id) : null);
+          const isAuthor = currentId && authorId && currentId === authorId;
+          if (isAuthor) {
+            // compact ellipsis menu for edit/delete
+            meta.style.position = meta.style.position || 'relative';
+            const ell = document.createElement('button'); ell.className = 'ellipsis-btn no-shimmer'; ell.type = 'button'; ell.title = 'Más acciones'; ell.innerHTML = '⋯'; ell.style.padding = '6px 8px'; ell.style.fontSize = '14px'; ell.style.borderRadius = '8px'; ell.style.minWidth = '34px'; ell.style.height = '30px';
+            const menu = document.createElement('div'); menu.className = 'ellipsis-menu hidden';
+            // menu items
+            const miEdit = document.createElement('button'); miEdit.className = 'menu-item'; miEdit.type = 'button'; miEdit.textContent = 'Editar';
+            const miDel = document.createElement('button'); miDel.className = 'menu-item'; miDel.type = 'button'; miDel.textContent = 'Eliminar';
+            menu.appendChild(miEdit); menu.appendChild(miDel);
+
+            // attach
+            actions.appendChild(ell); actions.appendChild(menu);
+
+            // delete handler
+            const doDelete = async () => {
+              if (!confirm('¿Eliminar este comentario?')) return;
+              try {
+                const res = await fetch(`${API_BASE}/api/photos/${c.photo_id}/comments/${c.id}`, { method: 'DELETE', credentials: 'include' });
+                if (!res.ok) {
+                  const j = await res.json().catch(()=>null);
+                  alert((j && j.error) ? j.error : 'No se pudo eliminar el comentario');
+                  return;
+                }
+                const newList = await fetchComments(c.photo_id);
+                renderCommentsInto(container, newList);
+              } catch (err) { console.error('delete comment error', err); alert('Error eliminando comentario'); }
+            };
+
+            // edit handler (inline)
+            const doEdit = () => {
+              // replace text node with textarea + save/cancel
+              const ta = document.createElement('textarea'); ta.style.width = '100%'; ta.style.padding = '8px'; ta.style.borderRadius = '8px'; ta.value = c.text || '';
+              const save = document.createElement('button'); save.className='btn primary small'; save.textContent='Guardar'; save.style.padding='6px 8px'; save.style.fontSize='12px';
+              const cancel = document.createElement('button'); cancel.className='btn ghost small'; cancel.textContent='Cancelar'; cancel.style.padding='6px 8px'; cancel.style.fontSize='12px';
+              try {
+                meta.replaceChild(ta, text);
+                actions.style.display = 'flex';
+                actions.innerHTML = '';
+                actions.appendChild(save); actions.appendChild(cancel);
+              } catch (e) { console.error('inline edit replace error', e); }
+              save.addEventListener('click', async (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const newText = (ta.value || '').trim();
+                if (!newText) return alert('El comentario no puede estar vacío');
+                try {
+                  const r = await fetch(`${API_BASE}/api/photos/${c.photo_id}/comments/${c.id}`, { method: 'PUT', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ text: newText }) });
+                  if (!r.ok) { const jj = await r.json().catch(()=>null); alert((jj && jj.error) ? jj.error : 'No se pudo editar'); return; }
+                  const updated = await r.json();
+                  meta.replaceChild(text, ta);
+                  text.textContent = updated.text || newText;
+                  actions.innerHTML = '';
+                  actions.appendChild(ell); actions.appendChild(menu);
+                } catch (err) { console.error('save edit error', err); alert('Error guardando comentario'); }
+              });
+              cancel.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                try { meta.replaceChild(text, ta); actions.innerHTML = ''; actions.appendChild(ell); actions.appendChild(menu); } catch(e){}
+              });
+            };
+
+            // menu interactions
+            ell.addEventListener('click', (ev) => {
+              ev.preventDefault(); ev.stopPropagation();
+              // toggle
+              const isHidden = menu.classList.contains('hidden');
+              document.querySelectorAll('.ellipsis-menu').forEach(m=>m.classList.add('hidden'));
+              if (isHidden) {
+                menu.classList.remove('hidden');
+              } else { menu.classList.add('hidden'); }
+            });
+
+            miDel.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); menu.classList.add('hidden'); doDelete(); });
+            miEdit.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); menu.classList.add('hidden'); doEdit(); });
+
+            // close menu on outside click
+            document.addEventListener('click', (ev) => { if (!menu.contains(ev.target) && !ell.contains(ev.target)) menu.classList.add('hidden'); });
+          }
+        } catch (e) { console.error('author check error', e); }
+
+        head.appendChild(who);
+        head.appendChild(when);
+        meta.appendChild(head);
+        meta.appendChild(text);
+        // position actions at top-right
+        if (actions && actions.childElementCount) {
+          const topRow = document.createElement('div'); topRow.style.display='flex'; topRow.style.justifyContent='flex-end'; topRow.style.marginBottom='6px'; topRow.appendChild(actions);
+          meta.insertBefore(topRow, text);
+        }
+        row.appendChild(img); row.appendChild(meta);
+        container.appendChild(row);
+      });
+    } catch (e) { console.error('renderCommentsInto error', e); }
+  }
+
+  function attachCommentHandler(formEl, photoId) {
+    try {
+      if (!formEl) return;
+      const ta = formEl.querySelector('textarea[name="comment"]');
+      const avatarImg = formEl.querySelector('.comment-avatar');
+      if (avatarImg && window.currentUser && window.currentUser.avatar_url) { avatarImg.src = window.currentUser.avatar_url; avatarImg.style.display = 'block'; }
+      formEl.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const txt = (ta && ta.value) ? ta.value.trim() : '';
+        if (!txt) return alert('Escribe un comentario');
+        try {
+          await postComment(photoId, txt);
+          const container = formEl.parentNode ? formEl.parentNode.querySelector('.comments-list') : null;
+          if (container) {
+            const curr = await fetchComments(photoId);
+            renderCommentsInto(container, curr);
+          }
+          if (ta) ta.value = '';
+        } catch (err) { alert('No se pudo publicar el comentario: ' + (err.message || err)); }
+      });
+    } catch (e) { console.error('attachCommentHandler', e); }
   }
 
   // Modal para ver listas de usuarios que reaccionaron

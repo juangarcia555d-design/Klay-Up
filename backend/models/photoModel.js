@@ -99,3 +99,61 @@ export async function getReactions(photoId) {
 export async function getUserReaction(photoId, userId) {
   return supabase.from('photo_reactions').select('reaction').eq('photo_id', photoId).eq('user_id', userId).limit(1).maybeSingle();
 }
+
+// Comentarios: crear y listar
+export async function createComment(photoId, userId, text) {
+  const payload = { photo_id: photoId, user_id: userId, text };
+  try {
+    return await supabase.from('photo_comments').insert(payload).select().single();
+  } catch (e) {
+    const msg = String(e && (e.message || e));
+    if (/does not exist|relation ".*photo_comments" does not exist|undefined_table/i.test(msg)) {
+      return { error: { message: 'Tabla photo_comments no encontrada en la base de datos. Ejecuta la migración create_photo_comments_table.sql en Supabase.' } };
+    }
+    return { error: e };
+  }
+}
+
+export async function getComments(photoId) {
+  try {
+    const { data, error } = await supabase.from('photo_comments').select('id,photo_id,user_id,text,created_at').eq('photo_id', photoId).order('created_at', { ascending: true });
+    if (error) return { error };
+    return { data };
+  } catch (e) {
+    const msg = String(e && (e.message || e));
+    if (/does not exist|relation ".*photo_comments" does not exist|undefined_table/i.test(msg)) return { data: [] };
+    return { error: e };
+  }
+}
+
+export async function getCommentById(commentId) {
+  try {
+    const { data, error } = await supabase.from('photo_comments').select('id,photo_id,user_id,text,created_at').eq('id', commentId).limit(1).maybeSingle();
+    if (error) return { error };
+    return { data };
+  } catch (e) {
+    const msg = String(e && (e.message || e));
+    if (/does not exist|relation ".*photo_comments" does not exist|undefined_table/i.test(msg)) return { data: null };
+    return { error: e };
+  }
+}
+
+export async function updateComment(commentId, text) {
+  try {
+    return await supabase.from('photo_comments').update({ text }).eq('id', commentId).select().single();
+  } catch (e) {
+    const msg = String(e && (e.message || e));
+    if (/does not exist|relation ".*photo_comments" does not exist|undefined_table/i.test(msg)) return { error: { message: 'Tabla photo_comments no encontrada en la base de datos. Ejecuta la migración.' } };
+    return { error: e };
+  }
+}
+
+export async function deleteComment(commentId) {
+  try {
+    return await supabase.from('photo_comments').delete().eq('id', commentId);
+  } catch (e) {
+    const msg = String(e && (e.message || e));
+    if (/does not exist|relation ".*photo_comments" does not exist|undefined_table/i.test(msg)) return { error: { message: 'Tabla photo_comments no encontrada en la base de datos. Ejecuta la migración.' } };
+    return { error: e };
+  }
+}

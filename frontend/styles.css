@@ -551,6 +551,120 @@ main {
 /* Dark theme variant */
 html[data-theme="dark"] .uploader-img { border-color: rgba(255,255,255,0.06); }
 
+/* ================= COMMENTS / ENMARQUES (mejorados) ================= */
+.card-comments {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.comment-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+
+.comment-avatar { width:40px; height:40px; border-radius:50%; object-fit:cover; flex-shrink:0; border:2px solid color-mix(in srgb, var(--border) 60%, transparent); }
+
+.comment-body { flex:1; display:flex; flex-direction:column; gap:6px; }
+
+.comment-head { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+.comment-author { font-weight:700; color:var(--text); font-size:14px; text-decoration:none; }
+.comment-time { font-size:12px; color:var(--muted); }
+.comment-text { color:var(--text); font-size:14px; line-height:1.45; white-space:pre-wrap; }
+
+.comment-actions { display:flex; gap:8px; align-items:center; }
+.comment-actions .btn { padding:6px 10px; font-size:12px; border-radius:8px; }
+.comment-actions .btn.ghost { background: transparent; border:1px solid color-mix(in srgb, var(--border) 70%, transparent); color:var(--text); }
+
+.comment-form { display:flex; gap:8px; align-items:flex-start; }
+.comment-form .comment-avatar { width:36px; height:36px; }
+.comment-form textarea { flex:1; min-height:40px; padding:8px; border-radius:10px; border:1px solid var(--border); resize:vertical; background: transparent; color:var(--text); }
+.comment-form button { padding:8px 14px; border-radius:10px; }
+
+/* Small screens: compact the comments layout */
+@media (max-width: 480px) {
+  .comments-list { max-height: 180px; }
+  .comment-avatar { width:34px; height:34px; }
+  .comment-head { gap:6px; }
+}
+
+/* Dark theme tweaks for comments */
+html[data-theme="dark"] .comment-row { background: color-mix(in srgb, var(--card) 88%, rgba(255,255,255,0.02)); border-color: color-mix(in srgb, var(--border) 80%, rgba(255,255,255,0.02)); }
+
+/* make small action buttons visually distinct */
+.comment-actions .btn.primary { background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 70%, #fff), var(--primary-hover)); color:#fff; }
+
+/* Ellipsis compact menu for comment actions */
+.ellipsis-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  width: 34px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.ellipsis-btn:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); color: var(--text); }
+.ellipsis-menu {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 110px;
+  z-index: 9999;
+}
+.ellipsis-menu.hidden { display: none; }
+.ellipsis-menu .menu-item {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+}
+.ellipsis-menu .menu-item:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+
+/* reuse for card-level ellipsis */
+.card-ellipsis { all: unset; display:inline-flex; align-items:center; justify-content:center; width:34px; height:30px; border-radius:8px; cursor:pointer; color:var(--muted); position: absolute; top: 10px; right: 10px; z-index: 60; background: rgba(255,255,255,0.02); }
+.card-ellipsis:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); color:var(--text); }
+.card-ellipsis-menu { position: absolute; top: 44px; right: 10px; background:var(--card); border:1px solid var(--border); box-shadow:var(--shadow-md); border-radius:8px; padding:6px; display:flex; flex-direction:column; gap:6px; min-width:120px; z-index:9999; }
+.card-ellipsis-menu.hidden { display:none; }
+.card-ellipsis-menu .menu-item { background:transparent; border:none; text-align:left; padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--text); }
+.card-ellipsis-menu .menu-item:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+
+/* end comments */
+
 .card:hover .card-img,
 .card-img:hover {
   transform: scale(1.05);

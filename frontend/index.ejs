@@ -123,8 +123,20 @@
         <p class="card-date"></p>
         <p class="card-cat"></p>
         <div class="card-actions">
-          <button class="edit">Editar</button>
-          <button class="delete">Eliminar</button>
+          <button class="card-ellipsis no-shimmer" type="button" title="Más acciones">⋯</button>
+          <div class="card-ellipsis-menu hidden">
+            <button class="menu-item card-edit" type="button">Editar</button>
+            <button class="menu-item card-delete" type="button">Eliminar</button>
+          </div>
+        </div>
+        <!-- Comentarios: lista y pequeño formulario -->
+        <div class="card-comments" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+          <div class="comments-list" style="max-height:160px;overflow:auto;margin-bottom:8px;padding-right:6px;"></div>
+          <form class="comment-form" style="display:flex;gap:8px;align-items:flex-start;">
+            <img class="comment-avatar" src="/imagen/default-avatar.png" alt="avatar" style="width:36px;height:36px;border-radius:50%;object-fit:cover;display:none;" />
+            <textarea name="comment" placeholder="Añade un comentario..." rows="1" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);resize:vertical;min-height:38px;"></textarea>
+            <button type="submit" class="btn small primary" style="white-space:nowrap;">Comentar</button>
+          </form>
         </div>
       </div>
     </div>
