@@ -1,3 +1,29 @@
+/* Música: controles responsivos en móvil */
+@media (max-width: 600px) {
+  #musicList .music-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+    padding: 10px 0 !important;
+    border-bottom: 1px solid var(--border);
+  }
+  #musicList .music-row audio {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto 6px auto !important;
+    display: block !important;
+  }
+  #musicList .music-row .btn.ghost {
+    width: 100% !important;
+    margin-top: 4px !important;
+    font-size: 16px !important;
+    padding: 12px 0 !important;
+  }
+  #musicList .music-row > div:first-child {
+    text-align: center !important;
+    margin-bottom: 2px !important;
+  }
+}
 :root {
   /* Colores base */
   --bg: #ffffff;

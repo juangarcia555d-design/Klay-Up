@@ -37,34 +37,61 @@
     if (!musicList) return;
     musicList.innerHTML = '';
     const audioEls = [];
+    // Detectar si es móvil
+    const isMobile = window.matchMedia && window.matchMedia('(max-width: 600px)').matches;
     list.forEach(item => {
       const row = document.createElement('div');
       row.className = 'music-row';
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-      row.style.justifyContent = 'space-between';
-      row.style.gap = '8px';
+      // En móvil, apilar verticalmente y hacer controles grandes
+      if (isMobile) {
+        row.style.display = 'flex';
+        row.style.flexDirection = 'column';
+        row.style.alignItems = 'stretch';
+        row.style.gap = '6px';
+        row.style.padding = '10px 0';
+      } else {
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.justifyContent = 'space-between';
+        row.style.gap = '8px';
+      }
 
       const info = document.createElement('div');
       info.innerHTML = `<strong>${escapeHtml(item.title||'Sin título')}</strong><div style="font-size:12px;color:var(--muted);">${escapeHtml(item.artist||'Desconocido')}</div>`;
+      if (isMobile) {
+        info.style.textAlign = 'center';
+        info.style.marginBottom = '2px';
+      }
+
       const controls = document.createElement('div');
       controls.className = 'music-controls';
-      controls.style.display = 'flex'; controls.style.gap='8px'; controls.style.alignItems='center';
+      controls.style.display = 'flex';
+      controls.style.gap = isMobile ? '0' : '8px';
+      controls.style.alignItems = 'center';
+      if (isMobile) {
+        controls.style.justifyContent = 'center';
+        controls.style.width = '100%';
+      }
 
       const audio = document.createElement('audio');
       audio.src = item.url;
       audio.controls = true;
       audio.preload = 'none';
-      audio.style.maxWidth = '360px';
+      if (isMobile) {
+        audio.style.width = '100%';
+        audio.style.maxWidth = '100%';
+        audio.style.margin = '0 auto 6px auto';
+        audio.style.display = 'block';
+      } else {
+        audio.style.maxWidth = '360px';
+      }
       // Manejar reproducción nativa: pausar otros audios y mantener índice para avanzar secuencialmente
       audio.addEventListener('play', () => {
         try {
           audioEls.forEach(a => { if (a !== audio) { try { a.pause(); } catch(e){} } });
-          // marcar índice actual
           audio._playingIndex = audioEls.indexOf(audio);
         } catch (e) { /* ignore */ }
       });
-      // Cuando termine, reproducir la siguiente pista de la lista
       audio.addEventListener('ended', () => {
         try {
           const idx = audioEls.indexOf(audio);
@@ -78,6 +105,12 @@
       const del = document.createElement('button');
       del.className = 'btn ghost';
       del.textContent = 'Eliminar';
+      if (isMobile) {
+        del.style.width = '100%';
+        del.style.marginTop = '4px';
+        del.style.fontSize = '16px';
+        del.style.padding = '12px 0';
+      }
       del.addEventListener('click', async ()=>{
         if (!confirm(`Eliminar "${item.title}" ?`)) return;
         try{
@@ -90,11 +123,16 @@
       controls.appendChild(audio);
       controls.appendChild(del);
       audioEls.push(audio);
-      row.appendChild(info);
-      row.appendChild(controls);
+      if (isMobile) {
+        row.appendChild(info);
+        row.appendChild(audio);
+        row.appendChild(del);
+      } else {
+        row.appendChild(info);
+        row.appendChild(controls);
+      }
       musicList.appendChild(row);
     });
-    // Si queremos, pre-cargar duración de audios para mostrar barras más rápido
     audioEls.forEach(a => { a.preload = 'metadata'; });
   }
 
