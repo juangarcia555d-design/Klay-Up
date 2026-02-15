@@ -448,13 +448,14 @@ document.addEventListener('DOMContentLoaded', () => {
         isLoadingPhotos = false;
         return;
       }
-      // Append items incrementally for smoothness
+      // Agregar items a photosData
       for (let k = 0; k < data.length; k++) {
         const item = data[k];
-        const idx = photosData.length;
         photosData.push(item);
-        try { renderCard(item, idx); } catch (e) { console.warn('renderCard append failed', e); }
       }
+      // Limpiar galería y renderizar agrupando correctamente
+      if (gallery) gallery.innerHTML = '';
+      renderGalleryFromPhotos();
       // advance offset
       currentOffset = (currentOffset || 0) + (Array.isArray(data) ? data.length : 0);
       if (!Array.isArray(data) || data.length < pageSize) {
@@ -480,18 +481,33 @@ document.addEventListener('DOMContentLoaded', () => {
         listTitle.textContent = currentCategory ? `Categoría: ${currentCategory} (${count} fotos)` : `Todas las fotos (${count})`;
       }
       const groups = [];
-      let i = 0;
-      while (i < (photosData || []).length) {
-        const base = photosData[i];
-        let group = [base];
-        let j = i + 1;
-        while (j < photosData.length && photosData[j].title === base.title && photosData[j].date_taken === base.date_taken && photosData[j].category === base.category) {
-          group.push(photosData[j]);
-          j++;
+      if (photosData.length > 0 && photosData[0].group_id !== undefined) {
+        // Agrupar por group_id si existe
+        const groupMap = {};
+        photosData.forEach((photo, idx) => {
+          const gid = photo.group_id || `__single__${photo.id}`;
+          if (!groupMap[gid]) groupMap[gid] = { items: [], startIndex: idx };
+          groupMap[gid].items.push(photo);
+        });
+        Object.values(groupMap).forEach(g => {
+          if (g.items.length > 1) groups.push({ type: 'group', items: g.items, startIndex: g.startIndex });
+          else groups.push({ type: 'single', item: g.items[0], index: g.startIndex });
+        });
+      } else {
+        // Agrupación antigua por coincidencia de campos
+        let i = 0;
+        while (i < (photosData || []).length) {
+          const base = photosData[i];
+          let group = [base];
+          let j = i + 1;
+          while (j < photosData.length && photosData[j].title === base.title && photosData[j].date_taken === base.date_taken && photosData[j].category === base.category) {
+            group.push(photosData[j]);
+            j++;
+          }
+          if (group.length > 1) groups.push({ type: 'group', items: group, startIndex: i });
+          else groups.push({ type: 'single', item: base, index: i });
+          i = j;
         }
-        if (group.length > 1) groups.push({ type: 'group', items: group, startIndex: i });
-        else groups.push({ type: 'single', item: base, index: i });
-        i = j;
       }
       groups.forEach(g => { if (g.type === 'group') renderGroup(g.items, g.startIndex); else renderCard(g.item, g.index); });
       // No items message
@@ -501,6 +517,31 @@ document.addEventListener('DOMContentLoaded', () => {
         m.style.padding = '24px';
         m.textContent = currentCategory ? `No hay fotos en la categoría ${currentCategory}` : 'No hay fotos';
         gallery.appendChild(m);
+      }
+      // Asegurar que el sentinel esté al final y se observe
+      let sentinel = document.getElementById('galleryEndSentinel');
+      if (!sentinel) {
+        sentinel = document.createElement('div');
+        sentinel.id = 'galleryEndSentinel';
+        sentinel.style.height = '1px';
+        sentinel.style.width = '100%';
+        gallery.appendChild(sentinel);
+      } else {
+        // Mover el sentinel al final si no está
+        if (gallery.lastElementChild !== sentinel) {
+          gallery.appendChild(sentinel);
+        }
+      }
+      if ('IntersectionObserver' in window) {
+        if (photosObserver) photosObserver.disconnect();
+        photosObserver = new IntersectionObserver((entries) => {
+          entries.forEach(ent => {
+            if (ent.isIntersecting) {
+              loadMorePhotos().catch(()=>{});
+            }
+          });
+        }, { root: null, rootMargin: '1000px', threshold: 0 });
+        photosObserver.observe(sentinel);
       }
     } catch (e) { console.warn('renderGalleryFromPhotos error', e); }
   }

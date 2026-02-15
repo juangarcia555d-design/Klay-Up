@@ -63,7 +63,7 @@ export async function listPhotos(req, res) {
     try {
         let q = supabase
           .from('photos')
-          .select('id, title, description, date_taken, category, url, user_id, created_at')
+          .select('id, title, description, date_taken, category, url, user_id, created_at, group_id')
           .neq('category', 'VIDEO')
           .eq('is_public', true)
           .order('created_at', { ascending: false });
@@ -92,7 +92,7 @@ export async function listPhotos(req, res) {
       try {
         let q2 = supabase
           .from('photos')
-          .select('id, title, description, date_taken, category, url, user_id, created_at')
+          .select('id, title, description, date_taken, category, url, user_id, created_at, group_id')
           .neq('category', 'VIDEO')
           .is('user_id', null)
           .order('created_at', { ascending: false });
@@ -320,8 +320,9 @@ export async function addPhoto(req, res) {
     let authUserId = null;
     try { if (token) { const p = jwt.verify(token, secret); if (p && p.userId) authUserId = p.userId; } } catch (e) { /* ignore invalid token */ }
 
-    // Usar la misma fecha para todas las fotos
+    // Usar la misma fecha y group_id para todas las fotos
     const nowDate = new Date().toISOString();
+    const groupId = crypto.randomUUID();
     for (const file of files) {
       // Validar tipo de archivo: permitir imágenes y videos
       if (!file.mimetype || (!file.mimetype.startsWith('image/') && !file.mimetype.startsWith('video/'))) {
@@ -352,7 +353,8 @@ export async function addPhoto(req, res) {
         // Si el archivo es un video, forzamos la categoría VIDEO para que sólo se muestre en esa sección
         category: file.mimetype && file.mimetype.startsWith('video/') ? 'VIDEO' : (category || 'GALERIA'),
         url,
-        is_public: true
+        is_public: true,
+        group_id: groupId
       };
       // Asociar `user_id` si el usuario está autenticado.
       try {

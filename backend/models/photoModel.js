@@ -5,7 +5,7 @@ const BUCKET = 'photos';
 export function getPhotos(category) {
   let query = supabase
     .from('photos')
-    .select('id, title, description, date_taken, category, url, user_id, created_at') // incluir created_at
+    .select('id, title, description, date_taken, category, url, user_id, created_at, group_id') // incluir group_id
     .order('created_at', { ascending: false });
   if (category) query = query.eq('category', category);
   return query;
@@ -14,7 +14,7 @@ export function getPhotos(category) {
 export function getPhotosByUser(userId, { includePrivate = false } = {}) {
   let q = supabase
     .from('photos')
-    .select('id, title, description, date_taken, category, url, is_public, created_at')
+    .select('id, title, description, date_taken, category, url, is_public, created_at, group_id')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   if (!includePrivate) q = q.eq('is_public', true);
