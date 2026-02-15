@@ -46,7 +46,7 @@
         <form id="profileUploadForm" enctype="multipart/form-data">
           <input type="text" name="title" placeholder="Título" />
             <textarea name="description" placeholder="Descripción (máx 100 chars)" maxlength="100"></textarea>
-          <input type="date" name="date_taken" />
+          <!-- Fecha eliminada: se usará la hora de publicación automática -->
           <select name="category">
             <option value="GALERIA">GALERIA</option>
             <option value="FOTOS">FOTOS</option>
@@ -64,7 +64,7 @@
         <div id="myPhotos" class="grid">
           <% if (Array.isArray(photos) && photos.length) { %>
             <% photos.forEach(function(it) { %>
-              <div class="card">
+              <div class="card" data-photo-id="<%= it.id %>">
                 <% if (it.url && (it.url.toLowerCase().endsWith('.mp4') || it.url.toLowerCase().endsWith('.webm') || it.url.toLowerCase().endsWith('.ogg') || it.url.toLowerCase().endsWith('.mov') || it.url.toLowerCase().endsWith('.m4v'))) { %>
                   <video class="card-video" controls style="max-width:100%;border-radius:6px;background:#000"><source src="<%= it.url %>" /></video>
                 <% } else { %>
@@ -73,6 +73,14 @@
                 <div class="card-body">
                   <h3 class="card-title"><%= it.title || '' %></h3>
                   <p class="card-desc"><%= it.description || '' %></p>
+                  <div class="card-actions-profile" style="position:absolute;top:8px;right:8px;">
+                    <button class="card-ellipsis" type="button" aria-label="Más acciones">⋯</button>
+                    <div class="card-ellipsis-menu hidden" style="min-width:120px;">
+                      <button class="menu-item card-edit" type="button">Editar</button>
+                      <button class="menu-item card-delete" type="button">Eliminar</button>
+                    </div>
+                  </div>
+                  <p class="card-date"><%= it.date_taken ? ('Fecha: ' + it.date_taken) : (it.created_at ? ('Publicado: ' + new Date(it.created_at).toLocaleString()) : '') %></p>
                 </div>
               </div>
             <% }); %>
@@ -115,9 +123,121 @@
     window.SUPABASE_ANON_KEY = "<%= SUPABASE_ANON_KEY %>" || '';
     window.API_BASE = window.location.origin;
   </script>
+  <!-- Edit modal for profile photos -->
+  <div id="profileEditModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Editar publicación</h3>
+      <form id="profileEditForm">
+        <input type="text" name="title" placeholder="Título" required />
+        <textarea name="description" placeholder="Descripción (máx 100 chars)" maxlength="100"></textarea>
+        <label>Categoría</label>
+        <select name="category">
+          <option value="GALERIA">GALERIA</option>
+          <option value="FOTOS">FOTOS</option>
+          <option value="RECUERDOS">RECUERDOS</option>
+        </select>
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+          <button type="submit" class="btn btn-primary">Guardar</button>
+          <button type="button" id="profileEditCancel" class="btn">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     (function(){
       const followBtn = document.getElementById('followBtn');
+      // Profile photo actions: edit/delete menu
+      function hideAllMenus() {
+        document.querySelectorAll('.card-ellipsis-menu').forEach(m => m.classList.add('hidden'));
+      }
+      document.addEventListener('click', (ev) => {
+        // close menus when clicking outside
+        if (!ev.target.closest || !ev.target.closest('.card-ellipsis-menu') && !ev.target.closest('.card-ellipsis')) {
+          hideAllMenus();
+        }
+      });
+
+      document.querySelectorAll('.card').forEach(card => {
+        const btn = card.querySelector('.card-ellipsis');
+        const menu = card.querySelector('.card-ellipsis-menu');
+        const editBtn = card.querySelector('.card-edit');
+        const delBtn = card.querySelector('.card-delete');
+        if (btn && menu) {
+          // ensure card is position:relative so menu position absolute anchors correctly
+          card.style.position = card.style.position || 'relative';
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // toggle menu visibility
+            const isHidden = menu.classList.contains('hidden');
+            hideAllMenus();
+            if (isHidden) menu.classList.remove('hidden'); else menu.classList.add('hidden');
+          });
+        }
+        if (editBtn) {
+          editBtn.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const pid = card.dataset.photoId;
+            // populate modal with current values
+            const title = card.querySelector('.card-title') ? card.querySelector('.card-title').textContent.trim() : '';
+            const desc = card.querySelector('.card-desc') ? card.querySelector('.card-desc').textContent.trim() : '';
+            const modal = document.getElementById('profileEditModal');
+            const form = document.getElementById('profileEditForm');
+            if (form) {
+              form.elements['title'].value = title;
+              form.elements['description'].value = desc;
+              // category may not be rendered in card; default to GALERIA
+              try { form.elements['category'].value = card.querySelector('.card-cat') ? (card.querySelector('.card-cat').textContent.replace('Categoría:','').trim() || 'GALERIA') : 'GALERIA'; } catch(e){}
+              form.dataset.editingId = pid;
+            }
+            hideAllMenus();
+            if (modal) modal.classList.remove('hidden');
+          });
+        }
+        if (delBtn) {
+          delBtn.addEventListener('click', async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (!confirm('¿Eliminar esta foto?')) return;
+            const pid = card.dataset.photoId;
+            try {
+              const res = await fetch(`${window.API_BASE}/api/photos/${pid}`, { method: 'DELETE', credentials: 'include' });
+              if (!res.ok) throw new Error('Error eliminando');
+              // remove card from DOM
+              card.parentNode && card.parentNode.removeChild(card);
+            } catch (err) { alert('No se pudo eliminar: ' + err.message); }
+          });
+        }
+      });
+
+      // Edit form submit
+      const profileEditForm = document.getElementById('profileEditForm');
+      if (profileEditForm) {
+        profileEditForm.addEventListener('submit', async (ev) => {
+          ev.preventDefault();
+          const id = profileEditForm.dataset.editingId;
+          if (!id) return;
+          const payload = {
+            title: profileEditForm.elements['title'].value || '',
+            description: profileEditForm.elements['description'].value || '',
+            category: profileEditForm.elements['category'].value || 'GALERIA'
+          };
+          try {
+            const res = await fetch(`${window.API_BASE}/api/photos/${id}`, { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload), credentials: 'include' });
+            if (!res.ok) throw new Error('Error al guardar');
+            const updated = await res.json();
+            // update card DOM
+            const card = document.querySelector(`.card[data-photo-id='${id}']`);
+            if (card) {
+              const t = card.querySelector('.card-title'); if (t) t.textContent = updated.title || payload.title || '';
+              const d = card.querySelector('.card-desc'); if (d) d.textContent = updated.description || payload.description || '';
+              const c = card.querySelector('.card-cat'); if (c) c.textContent = updated.category ? ('Categoría: ' + updated.category) : '';
+            }
+            document.getElementById('profileEditModal').classList.add('hidden');
+          } catch (err) { alert('No se pudo guardar: ' + err.message); }
+        });
+      }
+      const profileEditCancel = document.getElementById('profileEditCancel');
+      if (profileEditCancel) profileEditCancel.addEventListener('click', () => document.getElementById('profileEditModal').classList.add('hidden'));
       function getProfileUserId(){ try { if (typeof window !== 'undefined' && window.profilePageUserId) return String(window.profilePageUserId); const el = document.getElementById('profileData'); return el ? el.dataset.userid : ''; } catch(e){ return ''; } }
       if (followBtn) {
         followBtn.addEventListener('click', async () => {

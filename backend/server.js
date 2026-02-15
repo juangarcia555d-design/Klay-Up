@@ -105,12 +105,12 @@ app.get('/profile', async (req, res) => {
     // se muestren automáticamente en la página de perfil del usuario.
     let photosData = [];
     try {
-      const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', userId).eq('is_public', false).order('created_at', { ascending: false });
+      const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public,created_at').eq('user_id', userId).eq('is_public', false).order('created_at', { ascending: false });
       photosData = data || [];
     } catch (e) {
       // si la columna is_public no existe en la DB, caeremos al comportamiento anterior: mostrar todas
       try {
-        const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url').eq('user_id', userId).order('created_at', { ascending: false });
+        const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,created_at').eq('user_id', userId).order('created_at', { ascending: false });
         photosData = data || [];
       } catch (e2) {
         photosData = [];
@@ -146,13 +146,13 @@ app.get('/u/:id', async (req, res) => {
     // NO aparezcan en los perfiles — tanto para el propietario como para visitantes.
     let photosData = [];
     try {
-      const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public').eq('user_id', id).eq('is_public', false).order('created_at', { ascending: false });
+      const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,is_public,created_at').eq('user_id', id).eq('is_public', false).order('created_at', { ascending: false });
       photosData = data || [];
     } catch (e) {
       // Si la columna `is_public` no existe (migraciones antiguas), caemos al comportamiento
       // seguro: mostrar solo por `user_id` (esto puede incluir uploads públicos).
       try {
-        const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url').eq('user_id', id).order('created_at', { ascending: false });
+        const { data } = await supabase.from('photos').select('id,title,description,date_taken,category,url,created_at').eq('user_id', id).order('created_at', { ascending: false });
         photosData = data || [];
       } catch (e2) {
         photosData = [];

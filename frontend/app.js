@@ -605,7 +605,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const desc = node.querySelector('.card-desc');
     if (desc) desc.textContent = items[0].description || '';
     const dateEl = node.querySelector('.card-date');
-    if (dateEl) dateEl.textContent = items[0].date_taken ? `Fecha: ${items[0].date_taken}` : '';
+    if (dateEl) {
+      if (items[0].date_taken) dateEl.textContent = `Fecha: ${items[0].date_taken}`;
+      else if (items[0].created_at) dateEl.textContent = `Publicado: ${new Date(items[0].created_at).toLocaleString()}`;
+      else dateEl.textContent = '';
+    }
     const cat = node.querySelector('.card-cat');
     if (cat) cat.textContent = items[0].category ? `Categoría: ${items[0].category}` : '';
 
@@ -765,7 +769,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const desc = node.querySelector('.card-desc');
     if (desc) desc.textContent = item.description || '';
     const dateEl = node.querySelector('.card-date');
-    if (dateEl) dateEl.textContent = item.date_taken ? `Fecha: ${item.date_taken}` : '';
+    if (dateEl) {
+      if (item.date_taken) dateEl.textContent = `Fecha: ${item.date_taken}`;
+      else if (item.created_at) dateEl.textContent = `Publicado: ${new Date(item.created_at).toLocaleString()}`;
+      else dateEl.textContent = '';
+    }
     const cat = node.querySelector('.card-cat');
     if (cat) cat.textContent = item.category ? `Categoría: ${item.category}` : '';
 
@@ -1336,8 +1344,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       if (!selectedFiles.length) { alert('Selecciona al menos un archivo'); return; }
       const title = (uploadForm.title && uploadForm.title.value) || '';
-      const dateTaken = (uploadForm.date_taken && uploadForm.date_taken.value) || '';
-      if (!title || !dateTaken) { alert('Completa título y fecha'); return; }
+      if (!title) { alert('Completa el título'); return; }
 
       const form = new FormData();
       // append fields
@@ -1415,7 +1422,6 @@ document.addEventListener('DOMContentLoaded', () => {
     editingId = item.id;
     if (editForm.title) editForm.title.value = item.title || '';
     if (editForm.description) editForm.description.value = item.description || '';
-    if (editForm.date_taken) editForm.date_taken.value = item.date_taken || '';
     if (editForm.category) editForm.category.value = item.category || 'GALERIA';
     editModal.classList.remove('hidden');
   }
@@ -1426,7 +1432,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const payload = {
         title: editForm.title ? editForm.title.value : '',
         description: editForm.description ? editForm.description.value : '',
-        date_taken: editForm.date_taken ? editForm.date_taken.value : '',
         category: editForm.category ? editForm.category.value : ''
       };
       try {

@@ -64,7 +64,6 @@
           <label class="field">Título <input type="text" name="title" placeholder="Título" required></label>
           <label class="field">Descripción <textarea name="description" placeholder="Descripción" maxlength="250"></textarea></label>
           <div class="row">
-            <label class="field small">Fecha de la foto <input type="date" name="date_taken" required></label>
             <label class="field small">Categoría
               <select name="category" id="categorySelect" required>
                 <option value="GALERIA">GALERIA</option>
@@ -143,14 +142,13 @@
     </div>
   </template>
 
-  <div id="editModal" class="modal hidden">
+      <div id="editModal" class="modal hidden">
     <div class="modal-content">
       <h3>Editar foto</h3>
       <form id="editForm">
         <input type="text" name="title" required>
         <textarea name="description"></textarea>
-        <label>Fecha</label>
-        <input type="date" name="date_taken" required>
+        <!-- Fecha eliminada: se usará la hora de publicación automática -->
         <label>Categoría</label>
         <select name="category" required>
           <option value="GALERIA">GALERIA</option>

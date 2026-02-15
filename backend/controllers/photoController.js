@@ -59,7 +59,7 @@ export async function listPhotos(req, res) {
     try {
         const { data, error } = await supabase
           .from('photos')
-          .select('id, title, description, date_taken, category, url, user_id')
+          .select('id, title, description, date_taken, category, url, user_id, created_at')
           .neq('category', 'VIDEO')
           .eq('is_public', true)
           .order('created_at', { ascending: false });
@@ -86,7 +86,7 @@ export async function listPhotos(req, res) {
       try {
         const { data, error } = await supabase
           .from('photos')
-          .select('id, title, description, date_taken, category, url, user_id')
+          .select('id, title, description, date_taken, category, url, user_id, created_at')
           .neq('category', 'VIDEO')
           .is('user_id', null)
           .order('created_at', { ascending: false });
