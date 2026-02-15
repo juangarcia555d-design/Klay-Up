@@ -2875,4 +2875,151 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'ArrowLeft' && viewModal && !viewModal.classList.contains('hidden')) prevView();
     if (e.key === 'ArrowRight' && viewModal && !viewModal.classList.contains('hidden')) nextView();
   });
+
+  // Abrir panel de perfil inmediatamente y llenar datos en background
+  function showProfilePanelImmediate() {
+    try {
+      const panel = document.getElementById('profilePanel');
+      if (!panel) return;
+      // Mostrar panel inmediatamente (sin esperar fetch)
+      panel.classList.remove('hidden');
+      panel.setAttribute('aria-hidden', 'false');
+      // posicionar cerca del header/profileBtn si es absoluto
+      const profileBtn = document.getElementById('profileBtn');
+      if (profileBtn) {
+        const rect = profileBtn.getBoundingClientRect();
+        panel.style.position = 'absolute';
+        // colocar panel debajo del avatar si hay espacio, sino arriba
+        const top = (rect.bottom + window.scrollY + 8);
+        const left = Math.min(Math.max(8, rect.left + window.scrollX - 120), window.innerWidth - panel.offsetWidth - 8);
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
+      }
+
+      // Cargar datos del usuario en background y rellenar campos cuando lleguen
+      (async () => {
+        try {
+          const res = await fetch('/auth/me', { credentials: 'include' });
+          if (!res.ok) return;
+          const j = await res.json();
+          const user = j && j.user ? j.user : j;
+          if (!user) return;
+          const avatar = document.getElementById('profileAvatarLarge');
+          const name = document.getElementById('profileName');
+          const email = document.getElementById('profileEmail');
+          const desc = document.getElementById('profileDescription');
+          const followerCount = document.getElementById('followerCount');
+          const followingCount = document.getElementById('followingCount');
+          if (avatar && user.avatar_url) avatar.src = user.avatar_url;
+          if (name) name.textContent = user.full_name || user.display_name || user.email || 'Usuario';
+          if (email) email.textContent = user.email || '';
+          if (desc && typeof user.profile_description !== 'undefined') desc.value = user.profile_description || '';
+          if (followerCount && typeof user.followers_count !== 'undefined') followerCount.textContent = String(user.followers_count || 0);
+          if (followingCount && typeof user.following_count !== 'undefined') followingCount.textContent = String(user.following_count || 0);
+        } catch (e) {
+          console.warn('No se pudo cargar datos de perfil:', e);
+        }
+      })();
+    } catch (e) { console.warn('showProfilePanelImmediate error', e); }
+  }
+
+  // Listener global para evento disparado desde template
+  window.addEventListener('openProfilePanel', () => showProfilePanelImmediate());
+
+  // También exponer método para abrir panel sin pasar por CustomEvent
+  window.openProfilePanel = function() { showProfilePanelImmediate(); };
+
+  // Cerrar el panel de perfil de forma inmediata
+  function hideProfilePanelImmediate() {
+    try {
+      const panel = document.getElementById('profilePanel');
+      if (!panel) return;
+      panel.classList.add('hidden');
+      panel.setAttribute('aria-hidden', 'true');
+      panel.style.left = '';
+      panel.style.top = '';
+      panel.style.position = '';
+    } catch (e) { console.warn('hideProfilePanelImmediate error', e); }
+  }
+
+  // Toggle inmediato al pulsar el avatar (evitamos pasar por CustomEvent que puede tener handlers extra)
+  try {
+    const profileBtnEl = document.getElementById('profileBtn');
+    if (profileBtnEl) {
+      profileBtnEl.addEventListener('click', (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        const panel = document.getElementById('profilePanel');
+        if (!panel) return showProfilePanelImmediate();
+        if (panel.classList.contains('hidden')) showProfilePanelImmediate(); else hideProfilePanelImmediate();
+      });
+    }
+  } catch (e) { /* ignore */ }
+
+  // Inicializar controlador único para los menús de acciones (card-ellipsis)
+  if (!window._ellipsisInit) {
+    window._ellipsisInit = true;
+
+    const openMenus = new Set();
+
+    function closeAllEllipsisMenus() {
+      document.querySelectorAll('.card-ellipsis-menu').forEach(m => {
+        if (!m.classList.contains('hidden')) {
+          m.classList.add('hidden');
+          // reset inline positioning
+          m.style.left = '';
+          m.style.top = '';
+          // move back to original parent if we stored it
+          if (m.__originalParent) {
+            try { m.__originalParent.appendChild(m); } catch (e) {}
+            delete m.__originalParent;
+          }
+        }
+      });
+      openMenus.clear();
+    }
+
+    // Mostrar el menú junto al botón; movemos el menú al body para evitar clipping
+    function showEllipsisMenu(menu, btn) {
+      if (!menu || !btn) return;
+      // store original parent so we can restore later
+      if (!menu.__originalParent) menu.__originalParent = menu.parentElement;
+      try { document.body.appendChild(menu); } catch (e) {}
+      menu.classList.remove('hidden');
+      menu.style.position = 'absolute';
+      menu.style.visibility = 'hidden';
+      menu.style.display = 'block';
+      const b = btn.getBoundingClientRect();
+      const m = menu.getBoundingClientRect();
+      // align right edges
+      let left = Math.min(Math.max(8, b.right - m.width), window.innerWidth - m.width - 8) + window.scrollX;
+      let top = b.bottom + 6 + window.scrollY;
+      if (top + m.height > window.scrollY + window.innerHeight - 8) {
+        top = b.top - m.height - 6 + window.scrollY;
+      }
+      menu.style.left = left + 'px';
+      menu.style.top = top + 'px';
+      menu.style.visibility = '';
+      openMenus.add(menu);
+    }
+
+    // Delegated click handler (capture phase to reduce interference)
+    document.addEventListener('click', function handler(e) {
+      const btn = e.target.closest && e.target.closest('.card-ellipsis');
+      if (btn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const card = btn.closest && btn.closest('.card');
+        if (!card) return;
+        const menu = card.querySelector('.card-ellipsis-menu');
+        if (!menu) return;
+        const wasHidden = menu.classList.contains('hidden');
+        closeAllEllipsisMenus();
+        if (wasHidden) showEllipsisMenu(menu, btn);
+        return;
+      }
+      // click fuera: close menus
+      const insideMenu = e.target.closest && e.target.closest('.card-ellipsis-menu');
+      if (!insideMenu) closeAllEllipsisMenus();
+    }, true);
+  }
 });

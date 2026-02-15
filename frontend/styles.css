@@ -85,6 +85,12 @@ header {
   width: 100%;
 }
 
+/* En móviles desactivar header sticky para que se desplace al hacer scroll */
+@media (max-width: 900px) {
+  header { position: static !important; top: auto !important; }
+  .header-logo { position: static !important; height: auto !important; max-width: 120px !important; }
+}
+
 .brand { 
   display: flex; 
   gap: var(--space-sm); 
@@ -785,56 +791,151 @@ html[data-theme="dark"] .uploader-img { border-color: rgba(255,255,255,0.06); }
 .comment-form textarea { flex:1; min-height:40px; padding:8px; border-radius:10px; border:1px solid var(--border); resize:vertical; background: transparent; color:var(--text); }
 .comment-form button { padding:8px 14px; border-radius:10px; }
 
+/* ========== MENÚ DE TRES PUNTITOS - CORREGIDO ========== */
+/* Botón de tres puntitos - en la esquina superior derecha */
+.card-ellipsis { 
+  all: unset; 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center; 
+  width: 30px; 
+  height: 30px; 
+  cursor: pointer; 
+  color: var(--muted); 
+  background: transparent; 
+  font-size: 20px;
+  font-weight: bold;
+  transition: color 0.2s ease;
+  position: absolute; 
+  top: 10px; 
+  right: 10px; 
+  z-index: 100;
+  border: none;
+  padding: 0;
+  line-height: 1;
+}
+
+.card-ellipsis:hover { 
+  color: var(--primary); 
+  background: transparent; 
+}
+
+/* Menú de tres puntitos - aparece justo debajo */
+.card-ellipsis-menu { 
+  position: absolute; 
+  top: 40px;
+  right: 10px;
+  background: var(--card); 
+  border: 1px solid var(--border); 
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+  border-radius: 8px; 
+  padding: 4px 0; 
+  display: flex; 
+  flex-direction: column; 
+  min-width: 120px; 
+  max-width: 220px; 
+  width: auto;
+  z-index: 1000; 
+  box-sizing: border-box;
+}
+
+.card-ellipsis-menu.hidden { 
+  display: none; 
+}
+
+.card-ellipsis-menu .menu-item { white-space: nowrap; }
+
+/* Items del menú */
+.card-ellipsis-menu .menu-item { 
+  background: transparent; 
+  border: none; 
+  text-align: left; 
+  padding: 10px 16px; 
+  cursor: pointer; 
+  color: var(--text); 
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s ease;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.card-ellipsis-menu .menu-item:hover { 
+  background: color-mix(in srgb, var(--primary) 10%, transparent); 
+  color: var(--primary);
+}
+
+/* Menú para comentarios - similar */
 .ellipsis-btn {
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   color: var(--muted);
   font-size: 18px;
-  line-height: 1;
-  width: 34px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
   cursor: pointer;
+  transition: color 0.15s ease;
+  position: relative;
+  padding: 0;
 }
-.ellipsis-btn:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); color: var(--text); }
+
+.ellipsis-btn:hover { 
+  color: var(--primary); 
+}
+
 .ellipsis-menu {
   position: absolute;
-  top: 36px;
+  top: 100%;
   right: 0;
   background: var(--card);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   border-radius: 8px;
-  padding: 6px;
+  padding: 4px 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 110px;
-  max-width: calc(100vw - 24px);
+  min-width: 100px;
+  z-index: 1000;
   box-sizing: border-box;
-  z-index: 120000;
 }
-.ellipsis-menu.hidden { display: none; }
+
+.ellipsis-menu.hidden { 
+  display: none; 
+}
+
 .ellipsis-menu .menu-item {
   background: transparent;
   border: none;
   text-align: left;
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 8px 16px;
   cursor: pointer;
   color: var(--text);
+  font-size: 14px;
+  transition: background 0.15s ease;
+  width: 100%;
+  white-space: nowrap;
 }
-.ellipsis-menu .menu-item:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
 
-.card-ellipsis { all: unset; display:inline-flex; align-items:center; justify-content:center; width:34px; height:30px; border-radius:8px; cursor:pointer; color:var(--muted); position: absolute; top: 10px; right: 10px; z-index: 60; background: rgba(255,255,255,0.02); }
-.card-ellipsis:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); color:var(--text); }
-.card-ellipsis-menu { position: absolute; top: 44px; right: 10px; background:var(--card); border:1px solid var(--border); box-shadow:var(--shadow-md); border-radius:8px; padding:6px; display:flex; flex-direction:column; gap:6px; min-width:120px; z-index:120000; box-sizing: border-box; max-width: calc(100vw - 24px); }
-.card-ellipsis-menu.hidden { display:none; }
-.card-ellipsis-menu .menu-item { background:transparent; border:none; text-align:left; padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--text); }
-.card-ellipsis-menu .menu-item:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.ellipsis-menu .menu-item:hover {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+
+/* Ajustar el contenedor de la tarjeta */
+.card {
+  position: relative;
+}
+
+/* Asegurar que las acciones no interfieran */
+.card-actions { 
+  display: flex; 
+  gap: var(--space-sm); 
+  margin-top: var(--space-md);
+  justify-content: flex-end;
+}
 
 .card:hover .card-img,
 .card-img:hover {
@@ -863,12 +964,6 @@ html[data-theme="dark"] .uploader-img { border-color: rgba(255,255,255,0.06); }
   font-size: 14px;
   line-height: 1.5;
   word-wrap: break-word;
-}
-
-.card-actions { 
-  display: flex; 
-  gap: var(--space-sm); 
-  margin-top: var(--space-md);
 }
 
 /* ========== PROFILE POPOVER - VERSIÓN PC ========== */
@@ -1700,6 +1795,28 @@ option { background: var(--bg); color: var(--text); }
     white-space: nowrap;
   }
   
+  /* Menú de tres puntitos en móvil */
+  .card-ellipsis {
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    font-size: 18px;
+  }
+  
+  .card-ellipsis-menu {
+    top: 36px;
+    right: 8px;
+    min-width: 110px;
+    max-width: 220px;
+    width: auto;
+  }
+  
+  .card-ellipsis-menu .menu-item {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  
   .modal-content {
     padding: var(--space-lg);
     margin: var(--space-md);
@@ -1927,6 +2044,22 @@ option { background: var(--bg); color: var(--text); }
   
   .comment-form button {
     width: 100%;
+  }
+  
+  .card-ellipsis {
+    top: 6px;
+    right: 6px;
+    width: 26px;
+    height: 26px;
+    font-size: 18px;
+  }
+  
+  .card-ellipsis-menu {
+    top: 32px;
+    right: 6px;
+    min-width: 100px;
+    max-width: 220px;
+    width: auto;
   }
   
   .modal-content {
