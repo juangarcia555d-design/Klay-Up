@@ -280,15 +280,7 @@
         <textarea id="profileDescription" rows="4" placeholder="Escribe algo sobre ti..."></textarea>
         <div id="panelInboxBubbles" class="panel-bubbles"></div>
 
-        <!-- Controles de edición: eliminar / guardar (debajo de la descripción) -->
-        <div class="profile-controls">
-          <div class="controls-left">
-            <button id="deleteProfileDesc" class="btn ghost small">Eliminar</button>
-          </div>
-          <div class="controls-right">
-            <button id="saveProfileDesc" class="btn primary solid">Guardar</button>
-          </div>
-        </div>
+        <!-- Controles de edición eliminados: ahora el guardado es automático -->
       </div>
 
       <!-- Acciones separadas por finalidad: cuenta vs chat -->
@@ -362,14 +354,16 @@
     <div class="modal-content" style="max-width:720px;">
       <h3>Gestor de música</h3>
       <form id="musicForm">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <input type="text" name="title" placeholder="Título" required style="flex:1;min-width:160px;" />
-          <input type="text" name="artist" placeholder="Artista" required style="flex:1;min-width:160px;" />
+        <div class="music-form-row">
+          <input class="music-input" type="text" name="title" placeholder="Título" required />
+          <input class="music-input" type="text" name="artist" placeholder="Artista" required />
         </div>
-        <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
-          <input type="file" name="file" accept="audio/*" required />
-          <button type="submit">Guardar</button>
-          <button type="button" id="closeMusic">Cancelar</button>
+        <div class="music-form-row music-form-actions">
+          <label class="file-label">Seleccionar archivo<input class="music-file" type="file" name="file" accept="audio/*" required /></label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button type="submit" class="btn primary">Guardar</button>
+            <button type="button" id="closeMusic" class="btn ghost">Cancelar</button>
+          </div>
         </div>
       </form>
 

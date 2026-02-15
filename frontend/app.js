@@ -254,36 +254,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    if (persist) {
-      const saved = JSON.parse(localStorage.getItem('customCategories') || '[]');
-      if (!saved.includes(val)) {
-        saved.push(val);
-        localStorage.setItem('customCategories', JSON.stringify(saved));
-      }
-    }
-    // Return created value for convenience
-    return val;
+// Guardado automático de la descripción al escribir (siempre activo)
+document.addEventListener('DOMContentLoaded', () => {
+  const profileDesc = document.getElementById('profileDescription');
+  if (profileDesc) {
+    let timeoutId;
+    profileDesc.addEventListener('input', () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(async () => {
+        const desc = profileDesc.value || '';
+        try {
+          const res = await fetch(`${API_BASE}/auth/profile`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: desc }) });
+          if (!res.ok) {
+            const j = await res.json().catch(()=>null);
+            // Solo mostrar error si el usuario cambió el texto
+            alert((j && j.error) ? j.error : 'No se pudo guardar la descripción');
+            return;
+          }
+          // Opcional: mostrar feedback visual discreto
+          // console.log('Descripción guardada automáticamente');
+        } catch (e) { console.error('Error guardando descripción:', e); }
+      }, 800); // Espera 800ms tras dejar de escribir
+    });
   }
-
-  // Cargar categorías guardadas
-  try {
-    const saved = JSON.parse(localStorage.getItem('customCategories') || '[]');
-    if (Array.isArray(saved) && saved.length) saved.forEach(c => createCategory(c, false));
-  } catch (e) { /* ignore */ }
-
+});
   // Eliminar categoría: quitar tab, opción del select y actualizar localStorage
-  function deleteCategory(name) {
-    if (!name) return;
-    const val = name.trim();
-    // quitar del select
-    if (categorySelect) {
-      const opt = Array.from(categorySelect.options).find(o => (o.value||'').toLowerCase() === val.toLowerCase());
-      if (opt) opt.remove();
-    }
-    // quitar tab
-    const tab = Array.from(document.querySelectorAll('.tab')).find(t => (t.dataset.category||'').toLowerCase() === val.toLowerCase());
-    if (tab) tab.remove();
-    // quitar del storage
+    // Eliminado el botón y funcionalidad de eliminar descripción
     try {
       const saved = JSON.parse(localStorage.getItem('customCategories') || '[]');
       const filtered = saved.filter(s => (s||'').toLowerCase() !== val.toLowerCase());
@@ -2976,9 +2972,29 @@ document.addEventListener('DOMContentLoaded', () => {
           if (avatar && user.avatar_url) avatar.src = user.avatar_url;
           if (name) name.textContent = user.full_name || user.display_name || user.email || 'Usuario';
           if (email) email.textContent = user.email || '';
-          if (desc && typeof user.profile_description !== 'undefined') desc.value = user.profile_description || '';
+          // Solo sobreescribir si el usuario NO está editando
+          if (desc && typeof user.profile_description !== 'undefined') {
+            if (document.activeElement !== desc) {
+              desc.value = user.profile_description || '';
+            }
+          }
           if (followerCount && typeof user.followers_count !== 'undefined') followerCount.textContent = String(user.followers_count || 0);
           if (followingCount && typeof user.following_count !== 'undefined') followingCount.textContent = String(user.following_count || 0);
+          // Adjuntar guardado automático cada vez que se abre el panel
+          if (desc && !desc._autoSaveAttached) {
+            let timeoutId;
+            desc.addEventListener('input', () => {
+              clearTimeout(timeoutId);
+              timeoutId = setTimeout(async () => {
+                const value = desc.value || '';
+                try {
+                  const res = await fetch(`${API_BASE}/auth/profile`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: value }) });
+                  // Opcional: feedback visual
+                } catch (e) { console.error('Error guardando descripción:', e); }
+              }, 800);
+            });
+            desc._autoSaveAttached = true;
+          }
         } catch (e) {
           console.warn('No se pudo cargar datos de perfil:', e);
         }

@@ -48,6 +48,7 @@
       const info = document.createElement('div');
       info.innerHTML = `<strong>${escapeHtml(item.title||'Sin título')}</strong><div style="font-size:12px;color:var(--muted);">${escapeHtml(item.artist||'Desconocido')}</div>`;
       const controls = document.createElement('div');
+      controls.className = 'music-controls';
       controls.style.display = 'flex'; controls.style.gap='8px'; controls.style.alignItems='center';
 
       const audio = document.createElement('audio');
@@ -75,6 +76,7 @@
       });
 
       const del = document.createElement('button');
+      del.className = 'btn ghost';
       del.textContent = 'Eliminar';
       del.addEventListener('click', async ()=>{
         if (!confirm(`Eliminar "${item.title}" ?`)) return;

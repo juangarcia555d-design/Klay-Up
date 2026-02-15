@@ -357,6 +357,8 @@
       const avatarFile = document.getElementById('avatarFile');
       const uploadBtn = document.getElementById('avatarUploadBtn');
       const uploadProgressWrap = document.getElementById('avatarUploadProgress');
+      // Detectar si el perfil es propio (isOwner viene del backend)
+      const isOwner = <%- typeof isOwner !== 'undefined' && isOwner ? 'true' : 'false' %>;
 
       async function loadAvatarOptions() {
         try {
@@ -387,8 +389,13 @@
       }
 
       if (profileAvatar) {
-        profileAvatar.style.cursor = 'pointer';
-        profileAvatar.addEventListener('click', async (ev)=>{ ev.preventDefault(); try { picker.style.display = 'flex'; await loadAvatarOptions(); } catch(e){} });
+        if (isOwner) {
+          profileAvatar.style.cursor = 'pointer';
+          profileAvatar.addEventListener('click', async (ev)=>{ ev.preventDefault(); try { picker.style.display = 'flex'; await loadAvatarOptions(); } catch(e){} });
+        } else {
+          profileAvatar.style.cursor = 'default';
+          profileAvatar.addEventListener('click', (ev)=>{ ev.preventDefault(); /* Solo vista, sin acción */ });
+        }
       }
       if (closePicker) closePicker.addEventListener('click', ()=>{ picker.style.display = 'none'; });
 
