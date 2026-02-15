@@ -644,25 +644,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const isOwner = ownerId && currentId && ownerId === currentId;
       if (!actionsContainer) return;
       if (!isOwner) {
-        // remove actions to non-owners
         actionsContainer.parentNode && actionsContainer.parentNode.removeChild(actionsContainer);
       } else {
-        // wire up ellipsis menu inside actionsContainer (or create if missing)
-        let ell = actionsContainer.querySelector('.card-ellipsis');
-        let menu = actionsContainer.querySelector('.card-ellipsis-menu');
-        let miEdit = actionsContainer.querySelector('.card-edit');
-        let miDel = actionsContainer.querySelector('.card-delete');
-        if (!ell || !menu) {
-          // create compact menu
-          actionsContainer.innerHTML = '';
-          ell = document.createElement('button'); ell.className = 'card-ellipsis no-shimmer'; ell.type = 'button'; ell.title = 'Más acciones'; ell.innerHTML = '⋯';
-          menu = document.createElement('div'); menu.className = 'card-ellipsis-menu hidden';
-          miEdit = document.createElement('button'); miEdit.className = 'menu-item card-edit'; miEdit.type = 'button'; miEdit.textContent = 'Editar';
-          miDel = document.createElement('button'); miDel.className = 'menu-item card-delete'; miDel.type = 'button'; miDel.textContent = 'Eliminar';
-          menu.appendChild(miEdit); menu.appendChild(miDel);
-          actionsContainer.appendChild(ell); actionsContainer.appendChild(menu);
-        }
-        // interactions (use floating helpers to avoid clipping by parents)
+        // Menú de acciones para grupo: editar/eliminar
+        actionsContainer.innerHTML = '';
+        const ell = document.createElement('button'); ell.className = 'card-ellipsis no-shimmer'; ell.type = 'button'; ell.title = 'Más acciones'; ell.innerHTML = '⋯';
+        const menu = document.createElement('div'); menu.className = 'card-ellipsis-menu hidden';
+        const miEdit = document.createElement('button'); miEdit.className = 'menu-item card-edit'; miEdit.type = 'button'; miEdit.textContent = 'Editar';
+        const miDel = document.createElement('button'); miDel.className = 'menu-item card-delete'; miDel.type = 'button'; miDel.textContent = 'Eliminar';
+        menu.appendChild(miEdit); menu.appendChild(miDel);
+        actionsContainer.appendChild(ell); actionsContainer.appendChild(menu);
         ell.addEventListener('click', (ev) => {
           ev.preventDefault(); ev.stopPropagation();
           const isHidden = menu.classList.contains('hidden');
@@ -673,7 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
         miDel && miDel.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); hideFloatingMenu(menu); deletePhoto(items[0].id); });
         document.addEventListener('click', (ev) => { if (!menu.contains(ev.target) && !ell.contains(ev.target)) hideFloatingMenu(menu); });
       }
-    } catch (e) { /* ignore ownership errors and keep safe defaults */ }
+    } catch (e) { /* ignore ownership errors y mantener defaults seguros */ }
 
     // Mostrar uploader y reacciones como placa sobre la imagen (más atractiva)
     try {
