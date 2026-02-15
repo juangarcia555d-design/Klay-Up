@@ -320,6 +320,8 @@ export async function addPhoto(req, res) {
     let authUserId = null;
     try { if (token) { const p = jwt.verify(token, secret); if (p && p.userId) authUserId = p.userId; } } catch (e) { /* ignore invalid token */ }
 
+    // Usar la misma fecha para todas las fotos
+    const nowDate = new Date().toISOString();
     for (const file of files) {
       // Validar tipo de archivo: permitir imágenes y videos
       if (!file.mimetype || (!file.mimetype.startsWith('image/') && !file.mimetype.startsWith('video/'))) {
@@ -342,27 +344,23 @@ export async function addPhoto(req, res) {
       // Obtener URL pública
       const url = getPublicUrl(path);
 
-        // Payload para la fila en la tabla
-        const payload = {
-          title,
-          description,
-          date_taken,
-          // Si el archivo es un video, forzamos la categoría VIDEO para que sólo se muestre en esa sección
-          category: file.mimetype && file.mimetype.startsWith('video/') ? 'VIDEO' : (category || 'GALERIA'),
-          url,
-          is_public: true
-        };
-        // Asociar `user_id` si el usuario está autenticado.
-        // Antes asociábamos solo cuando scope === 'profile', eso hacía que las subidas desde el index
-        // no tuvieran `user_id` y por tanto no mostraran el uploader en la galería. Ahora siempre
-        // preservamos la relación con el usuario autenticado (seguimos marcando `is_public=false`
-        // cuando la subida es de perfil).
-        try {
-          if (authUserId) {
-            payload.user_id = authUserId;
-            if (scope === 'profile') payload.is_public = false;
-          }
-        } catch (e) { /* ignore */ }
+      // Payload para la fila en la tabla
+      const payload = {
+        title,
+        description,
+        date_taken: nowDate,
+        // Si el archivo es un video, forzamos la categoría VIDEO para que sólo se muestre en esa sección
+        category: file.mimetype && file.mimetype.startsWith('video/') ? 'VIDEO' : (category || 'GALERIA'),
+        url,
+        is_public: true
+      };
+      // Asociar `user_id` si el usuario está autenticado.
+      try {
+        if (authUserId) {
+          payload.user_id = authUserId;
+          if (scope === 'profile') payload.is_public = false;
+        }
+      } catch (e) { /* ignore */ }
       console.log('DB payload:', payload);
 
       // Insertar registro
