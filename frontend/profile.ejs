@@ -18,7 +18,20 @@
       <div class="profile-hero">
         <img id="profileFullAvatar" src="<%= user.avatar_url || '/imagen/default-avatar.png' %>" alt="Avatar" class="profile-avatar-large" />
         <div class="profile-meta">
-          <h1><%= user.full_name || 'Sin nombre' %></h1>
+          <h1>
+            <%= user.full_name || 'Sin nombre' %>
+            <% if (user && user.verified_role) { %>
+              <% if (String(user.verified_role).toUpperCase() === 'ADMIN') { %>
+                <span class="verified-badge admin" title="Administrador verificado">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M9.5 16.5L5 12l1.4-1.4L9.5 13.7 17.6 5.6 19 7l-9.5 9.5z"></path></svg>
+                </span>
+              <% } else if (String(user.verified_role).toUpperCase() === 'ARTIST') { %>
+                <span class="verified-badge artist" title="Artista verificado">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M12 2C7.03 2 3 6.03 3 11c0 2.95 2.41 5.4 5.36 5.7.66.07 1.2.61 1.3 1.27.16 1.09 1.15 1.93 2.26 1.93 4.97 0 9-4.03 9-9S16.97 2 12 2zm-1 5a1 1 0 11.001 2.001A1 1 0 0111 7zm4 2a1 1 0 11.001 2.001A1 1 0 0115 9z"></path></svg>
+                </span>
+              <% } %>
+            <% } %>
+          </h1>
           <div class="muted"><%= user.email %></div>
           <p class="profile-desc"><%= user.profile_description || '' %></p>
           <div style="margin-top:8px;display:flex;gap:12px;align-items:center;">
@@ -300,7 +313,8 @@
             console.debug('[diag] followers count payload length ->', listArr.length, 'apiCount:', j.count);
             const list = listArr.map(item => {
               const u = item.user || item || {};
-              return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${escapeHtml(u.full_name||u.email||u.id)}</a></div></div>`;
+              const badgeHtml = u.verified_role ? (String(u.verified_role).toUpperCase() === 'ADMIN' ? '<span class="verified-badge admin" title="Administrador verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M9.5 16.5L5 12l1.4-1.4L9.5 13.7 17.6 5.6 19 7l-9.5 9.5z"></path></svg></span>' : '<span class="verified-badge artist" title="Artista verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M12 2C7.03 2 3 6.03 3 11c0 2.95 2.41 5.4 5.36 5.7.66.07 1.2.61 1.3 1.27.16 1.09 1.15 1.93 2.26 1.93 4.97 0 9-4.03 9-9S16.97 2 12 2zm-1 5a1 1 0 11.001 2.001A1 1 0 0111 7zm4 2a1 1 0 11.001 2.001A1 1 0 0115 9z"></path></svg></span>') : '';
+              return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${escapeHtml(u.full_name||u.email||u.id)}</a>${badgeHtml}</div></div>`;
             }).join('');
             showListModal('Seguidores', list || '<div class="muted">No tiene seguidores</div>');
           } catch (e) { console.error(e); alert('Error al obtener seguidores'); }
@@ -322,7 +336,8 @@
             console.debug('[diag] following payload length ->', listArr.length, 'apiCount:', j.count);
             const list = listArr.map(item => {
               const u = item.user || item || {};
-              return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${escapeHtml(u.full_name||u.email||u.id)}</a></div></div>`;
+              const badgeHtml = u.verified_role ? (String(u.verified_role).toUpperCase() === 'ADMIN' ? '<span class="verified-badge admin" title="Administrador verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M9.5 16.5L5 12l1.4-1.4L9.5 13.7 17.6 5.6 19 7l-9.5 9.5z"></path></svg></span>' : '<span class="verified-badge artist" title="Artista verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M12 2C7.03 2 3 6.03 3 11c0 2.95 2.41 5.4 5.36 5.7.66.07 1.2.61 1.3 1.27.16 1.09 1.15 1.93 2.26 1.93 4.97 0 9-4.03 9-9S16.97 2 12 2zm-1 5a1 1 0 11.001 2.001A1 1 0 0111 7zm4 2a1 1 0 11.001 2.001A1 1 0 0115 9z"></path></svg></span>') : '';
+              return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${escapeHtml(u.full_name||u.email||u.id)}</a>${badgeHtml}</div></div>`;
             }).join('');
             showListModal('Siguiendo', list || '<div class="muted">No sigue a nadie</div>');
           } catch (e) { console.error(e); alert('Error al obtener la lista de seguidos'); }

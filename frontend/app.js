@@ -42,6 +42,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let editingId = null;
   let photosData = [];
   let currentIndex = -1;
+  let pageSize = 6;
+  let currentOffset = 0;
+  let isLoadingPhotos = false;
+  let hasMorePhotos = true;
+  let photosObserver = null;
 
   // 🎵 Música — reproductor global con cola accesible desde UI
   if (playMusicBtn && bgMusic) {
@@ -416,67 +421,71 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!gallery) return;
     const force = !!opts.force;
     if (force) {
+      photosData = [];
+      currentOffset = 0;
+      hasMorePhotos = true;
       try { gallery.innerHTML = ''; } catch (e) {}
-      renderSkeletons(6);
-    } else {
-      if (!gallery.children.length) renderSkeletons(6);
     }
-    const url = currentCategory ? `${API_BASE}/api/photos?category=${encodeURIComponent(currentCategory)}`
-                                : `${API_BASE}/api/photos`;
+    // initial skeletons
+    if (!gallery.children.length) renderSkeletons(pageSize);
+    return loadMorePhotos();
+  }
+
+  async function loadMorePhotos() {
+    if (!gallery || isLoadingPhotos || !hasMorePhotos) return;
+    isLoadingPhotos = true;
+    renderSkeletons(pageSize);
+    const url = currentCategory ? `${API_BASE}/api/photos?category=${encodeURIComponent(currentCategory)}&limit=${pageSize}&offset=${currentOffset}`
+                                : `${API_BASE}/api/photos?limit=${pageSize}&offset=${currentOffset}`;
     try {
       const res = await fetch(url);
       if (!res.ok) {
         console.error('Error al obtener fotos, status:', res.status);
         removeSkeletons();
+        isLoadingPhotos = false;
         return;
       }
       const data = await res.json();
       if (!Array.isArray(data)) {
         console.warn('Respuesta inesperada al obtener fotos:', data);
         removeSkeletons();
+        isLoadingPhotos = false;
         return;
       }
-      console.log('Fotos recibidas (raw):', data);
-      // Filtrar por categoría en cliente por seguridad (case-insensitive)
-      let filtered = data;
-      if (currentCategory) {
-        const cc = String(currentCategory || '').toLowerCase();
-        filtered = (data || []).filter(d => String(d.category || '').toLowerCase() === cc);
+      // Append items incrementally for smoothness
+      for (let k = 0; k < data.length; k++) {
+        const item = data[k];
+        const idx = photosData.length;
+        photosData.push(item);
+        try { renderCard(item, idx); } catch (e) { console.warn('renderCard append failed', e); }
       }
-      console.log('Fotos tras filtro cliente (category=', currentCategory, '):', filtered.length);
-      // actualizar estado local
-      photosData = filtered;
-      // Mostrar contador en el título para feedback inmediato
-      try {
-        if (listTitle) {
-          const count = (photosData || []).length;
-          listTitle.textContent = currentCategory ? `Categoría: ${currentCategory} (${count} fotos)` : `Todas las fotos (${count})`;
-        }
-      } catch (e) {}
-      // Construir mapa de elementos existentes en DOM por id (incluye grupos)
-      const existingMap = new Map();
-      gallery.querySelectorAll('[data-photo-id]').forEach(el => { existingMap.set(String(el.dataset.photoId), el); });
-      gallery.querySelectorAll('[data-photo-ids]').forEach(el => {
-        const ids = (el.dataset.photoIds || '').split(',').map(s=>s.trim()).filter(Boolean);
-        ids.forEach(id => { if (!existingMap.has(String(id))) existingMap.set(String(id), el); });
-      });
-      // Usar los ids de las fotos ya filtradas para decidir qué eliminar del DOM
-      const newIds = new Set((photosData||[]).map(d => String(d.id)));
-      // Remover elementos que ya no existen en el servidor
-      const toRemove = [];
-      existingMap.forEach((el, id) => {
-        if (!newIds.has(String(id))) toRemove.push({ id, el });
-      });
-      // Siempre eliminar elementos que ya no están en el servidor para mantener las categorías sincronizadas.
-      if (toRemove.length > 0) {
-        toRemove.forEach(r => { try { r.el.remove(); } catch(e){} });
+      // advance offset
+      currentOffset = (currentOffset || 0) + (Array.isArray(data) ? data.length : 0);
+      if (!Array.isArray(data) || data.length < pageSize) {
+        hasMorePhotos = false;
+        try {
+          const s = document.getElementById('galleryEndSentinel');
+          if (photosObserver && s) photosObserver.unobserve(s);
+        } catch (e) {}
       }
-      // limpiar esqueletos si existían
       removeSkeletons();
-      // Agrupar elementos contiguos que pertenecen a la misma subida (misma title, date_taken y category)
+    } catch (err) {
+      console.error('Error loadMorePhotos:', err);
+      removeSkeletons();
+    }
+    isLoadingPhotos = false;
+  }
+
+  function renderGalleryFromPhotos() {
+    try {
+      // Mostrar contador en el título
+      if (listTitle) {
+        const count = (photosData || []).length;
+        listTitle.textContent = currentCategory ? `Categoría: ${currentCategory} (${count} fotos)` : `Todas las fotos (${count})`;
+      }
       const groups = [];
       let i = 0;
-      while (i < photosData.length) {
+      while (i < (photosData || []).length) {
         const base = photosData[i];
         let group = [base];
         let j = i + 1;
@@ -488,27 +497,8 @@ document.addEventListener('DOMContentLoaded', () => {
         else groups.push({ type: 'single', item: base, index: i });
         i = j;
       }
-      // Renderizar grupos: si se fuerza, renderizar todo de cero; si no, añadir solo los nuevos
-      if (force) {
-        try { gallery.innerHTML = ''; } catch(e){}
-        groups.forEach(g => { if (g.type === 'group') renderGroup(g.items, g.startIndex); else renderCard(g.item, g.index); });
-      } else {
-        groups.forEach(g => {
-          try {
-            if (g.type === 'group') {
-              const firstId = String(g.items[0].id);
-              const existsAsSingle = !!gallery.querySelector(`[data-photo-id="${firstId}"]`);
-              const existsAsGroup = Array.from(gallery.querySelectorAll('[data-photo-ids]')).some(n=> (n.dataset.photoIds||'').split(',').includes(firstId));
-              if (!existsAsSingle && !existsAsGroup) renderGroup(g.items, g.startIndex);
-            } else {
-              const id = String(g.item.id);
-              const exists = !!gallery.querySelector(`[data-photo-id="${id}"]`) || Array.from(gallery.querySelectorAll('[data-photo-ids]')).some(n=> (n.dataset.photoIds||'').split(',').includes(id));
-              if (!exists) renderCard(g.item, g.index);
-            }
-          } catch(e) { console.warn('render group diff error', e); }
-        });
-      }
-      // Si no hay fotos para la categoría, mostrar mensaje amigable
+      groups.forEach(g => { if (g.type === 'group') renderGroup(g.items, g.startIndex); else renderCard(g.item, g.index); });
+      // No items message
       if ((!photosData || photosData.length === 0) && gallery) {
         const m = document.createElement('div');
         m.className = 'muted';
@@ -516,10 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
         m.textContent = currentCategory ? `No hay fotos en la categoría ${currentCategory}` : 'No hay fotos';
         gallery.appendChild(m);
       }
-    } catch (err) {
-      console.error('Error fetchPhotos:', err);
-      removeSkeletons();
-    }
+    } catch (e) { console.warn('renderGalleryFromPhotos error', e); }
   }
 
   // Renderiza un grupo de imágenes/vídeos como un mosaico dentro de una tarjeta
@@ -667,6 +654,13 @@ document.addEventListener('DOMContentLoaded', () => {
         aname.style.cursor = 'pointer';
         aname.addEventListener('click', (ev) => { ev.stopPropagation(); /* avoid opening lightbox */ });
         left.appendChild(aimg); left.appendChild(aname);
+        // badge
+        try {
+          const vr = uploader.verified_role || uploader.verified || null;
+          if (vr) {
+            left.appendChild(createVerifiedBadge(vr));
+          }
+        } catch (e) {}
       }
       overlay.appendChild(left);
 
@@ -758,6 +752,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (img) {
         img.src = item.url;
         img.loading = 'lazy';
+        img.decoding = 'async';
         img.alt = item.title || 'Foto';
         img.style.display = 'block';
       }
@@ -833,6 +828,12 @@ document.addEventListener('DOMContentLoaded', () => {
       aname.style.cursor = 'pointer';
       aname.addEventListener('click', (ev) => { ev.stopPropagation(); });
       left.appendChild(aimg); left.appendChild(aname);
+      try {
+        const vr = uploader.verified_role || uploader.verified || null;
+        if (vr) {
+          left.appendChild(createVerifiedBadge(vr));
+        }
+      } catch (e) {}
     } else if (item.user_id) {
       // fallback: fetch public user info
       (async () => {
@@ -848,6 +849,12 @@ document.addEventListener('DOMContentLoaded', () => {
           aname.addEventListener('click', (ev) => { ev.stopPropagation(); });
           // clear left and append
           left.innerHTML = ''; left.appendChild(aimg); left.appendChild(aname);
+          try {
+            const vr2 = u.verified_role || u.verified || null;
+            if (vr2) {
+              left.appendChild(createVerifiedBadge(vr2));
+            }
+          } catch (e) {}
         } catch (e) { /* ignore */ }
       })();
     }
@@ -923,6 +930,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cf && pid) attachCommentHandler(cf, pid);
       }
     } catch (e) { /* ignore */ }
+  }
+
+  // Helper: crear un badge verificado (SVG) según rol
+  function createVerifiedBadge(role) {
+    try {
+      const r = String(role || '').toUpperCase();
+      const span = document.createElement('span');
+      span.className = 'verified-badge ' + (r === 'ADMIN' ? 'admin' : (r === 'ARTIST' ? 'artist' : ''));
+      span.setAttribute('aria-hidden', 'true');
+      span.title = r === 'ADMIN' ? 'Administrador verificado' : (r === 'ARTIST' ? 'Artista verificado' : 'Verificado');
+      if (r === 'ADMIN') {
+        span.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M9.5 16.5L5 12l1.4-1.4L9.5 13.7 17.6 5.6 19 7l-9.5 9.5z"></path></svg>';
+      } else if (r === 'ARTIST') {
+        span.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M12 2C7.03 2 3 6.03 3 11c0 2.95 2.41 5.4 5.36 5.7.66.07 1.2.61 1.3 1.27.16 1.09 1.15 1.93 2.26 1.93 4.97 0 9-4.03 9-9S16.97 2 12 2zm-1 5a1 1 0 11.001 2.001A1 1 0 0111 7zm4 2a1 1 0 11.001 2.001A1 1 0 0115 9z"></path></svg>';
+      } else {
+        span.textContent = '✓';
+      }
+      return span;
+    } catch (e) {
+      const s = document.createElement('span'); s.className = 'verified-badge'; s.textContent = '✓'; return s;
+    }
   }
 
   // Render simple skeleton placeholders to improve perceived load
@@ -1088,6 +1116,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const meta = document.createElement('div'); meta.style.flex='1';
         const head = document.createElement('div'); head.style.display='flex'; head.style.justifyContent='space-between'; head.style.alignItems='center';
         const who = document.createElement('div'); who.style.fontWeight='700'; who.style.fontSize='13px'; who.textContent = (c.user && (c.user.full_name || c.user.email)) ? (c.user.full_name || c.user.email) : ('Usuario ' + (c.user && c.user.id ? c.user.id : ''));
+          try {
+            const cvr = c.user && (c.user.verified_role || c.user.verified) ? (c.user.verified_role || c.user.verified) : null;
+            if (cvr) {
+              who.appendChild(createVerifiedBadge(cvr));
+            }
+          } catch (e) {}
         const when = document.createElement('div'); when.style.fontSize='11px'; when.style.color='var(--muted)'; when.textContent = (c.created_at ? (new Date(c.created_at)).toLocaleString() : '');
         const text = document.createElement('div'); text.style.marginTop='4px'; text.textContent = c.text || '';
         const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px';
@@ -1244,8 +1278,11 @@ document.addEventListener('DOMContentLoaded', () => {
           arr.forEach(u => {
             const row = document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.marginBottom='6px';
             const img = document.createElement('img'); img.src = u.avatar_url || '/imagen/default-avatar.png'; img.style.width='36px'; img.style.height='36px'; img.style.borderRadius='50%'; img.style.objectFit='cover';
+            const nameWrap = document.createElement('div'); nameWrap.style.display = 'flex'; nameWrap.style.alignItems = 'center'; nameWrap.style.gap = '6px';
             const name = document.createElement('div'); name.textContent = u.full_name || (`Usuario ${u.id}`);
-            row.appendChild(img); row.appendChild(name);
+            nameWrap.appendChild(name);
+            try { if (u.verified_role || u.verified) nameWrap.appendChild(createVerifiedBadge(u.verified_role || u.verified)); } catch(e) {}
+            row.appendChild(img); row.appendChild(nameWrap);
             container.appendChild(row);
           });
         }
@@ -1536,6 +1573,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // 🚀 Inicial
   fetchPhotos({ force: true });
 
+  // IntersectionObserver para carga incremental: observa el sentinel en index.ejs
+  try {
+    const sentinel = document.getElementById('galleryEndSentinel');
+    if (sentinel && 'IntersectionObserver' in window) {
+      photosObserver = new IntersectionObserver((entries) => {
+        entries.forEach(ent => {
+          if (ent.isIntersecting) {
+            loadMorePhotos().catch(()=>{});
+          }
+        });
+      }, { root: null, rootMargin: '1000px', threshold: 0 });
+      photosObserver.observe(sentinel);
+    }
+  } catch (e) { console.warn('Observer setup failed', e); }
+
   // Perfil de usuario: cargar datos y manejar panel
   async function loadUserProfile() {
     try {
@@ -1553,7 +1605,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (avatarLarge && user.avatar_url) avatarLarge.src = user.avatar_url;
       const nameEl = document.getElementById('profileName');
       if (nameEl) {
-        nameEl.textContent = user.full_name || '';
+        try {
+          const vr = user.verified_role || user.verified || null;
+          nameEl.textContent = user.full_name || '';
+          if (vr) {
+            nameEl.appendChild(createVerifiedBadge(vr));
+          }
+        } catch (e) {
+          nameEl.textContent = user.full_name || '';
+        }
         nameEl.style.cursor = 'pointer';
         nameEl.addEventListener('click', () => { window.location.href = '/profile'; });
       }
@@ -1655,7 +1715,11 @@ document.addEventListener('DOMContentLoaded', () => {
               const r = await fetch(`/api/users/${encodeURIComponent(user.id)}/followers`);
               if (!r.ok) { const j = await r.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error'); return; }
               const j = await r.json();
-              const listHtml = (j.data || []).map(item => { const u = item.user || item || {}; return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${u.full_name||u.email||u.id}</a></div></div>`; }).join('');
+              const listHtml = (j.data || []).map(item => {
+                const u = item.user || item || {};
+                const badgeHtml = u.verified_role ? (String(u.verified_role).toUpperCase() === 'ADMIN' ? '<span class="verified-badge admin" title="Administrador verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M9.5 16.5L5 12l1.4-1.4L9.5 13.7 17.6 5.6 19 7l-9.5 9.5z"></path></svg></span>' : '<span class="verified-badge artist" title="Artista verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M12 2C7.03 2 3 6.03 3 11c0 2.95 2.41 5.4 5.36 5.7.66.07 1.2.61 1.3 1.27.16 1.09 1.15 1.93 2.26 1.93 4.97 0 9-4.03 9-9S16.97 2 12 2zm-1 5a1 1 0 11.001 2.001A1 1 0 0111 7zm4 2a1 1 0 11.001 2.001A1 1 0 0115 9z"></path></svg></span>') : '';
+                return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${u.full_name||u.email||u.id}</a>${badgeHtml}</div></div>`;
+              }).join('');
               if (window.showListModal) window.showListModal('Seguidores', listHtml);
               else makeModal('Seguidores', listHtml);
             } catch (e) { console.error('showFollowersList error', e); alert('Error al obtener seguidores'); }
@@ -1666,7 +1730,11 @@ document.addEventListener('DOMContentLoaded', () => {
               const r = await fetch(`/api/users/${encodeURIComponent(user.id)}/following`);
               if (!r.ok) { const j = await r.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error'); return; }
               const j = await r.json();
-              const listHtml = (j.data || []).map(item => { const u = item.user || item || {}; return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${u.full_name||u.email||u.id}</a></div></div>`; }).join('');
+              const listHtml = (j.data || []).map(item => {
+                const u = item.user || item || {};
+                const badgeHtml = u.verified_role ? (String(u.verified_role).toUpperCase() === 'ADMIN' ? '<span class="verified-badge admin" title="Administrador verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M9.5 16.5L5 12l1.4-1.4L9.5 13.7 17.6 5.6 19 7l-9.5 9.5z"></path></svg></span>' : '<span class="verified-badge artist" title="Artista verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M12 2C7.03 2 3 6.03 3 11c0 2.95 2.41 5.4 5.36 5.7.66.07 1.2.61 1.3 1.27.16 1.09 1.15 1.93 2.26 1.93 4.97 0 9-4.03 9-9S16.97 2 12 2zm-1 5a1 1 0 11.001 2.001A1 1 0 0111 7zm4 2a1 1 0 11.001 2.001A1 1 0 0115 9z"></path></svg></span>') : '';
+                return `<div style="display:flex;align-items:center;gap:8px;padding:8px"><img src="${u.avatar_url||'/imagen/default-avatar.png'}" style="width:32px;height:32px;border-radius:999px;object-fit:cover"/><div><a href='/u/${u.id}' style='text-decoration:none;color:inherit'>${u.full_name||u.email||u.id}</a>${badgeHtml}</div></div>`;
+              }).join('');
               if (window.showListModal) window.showListModal('Siguiendo', listHtml);
               else makeModal('Siguiendo', listHtml);
             } catch (e) { console.error('showFollowingList error', e); alert('Error al obtener la lista de seguidos'); }
@@ -1781,9 +1849,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const groupContactsList = document.getElementById('groupContactsList');
   const sendGroupInvitesBtn = document.getElementById('sendGroupInvitesBtn');
   const groupTitleInput = document.getElementById('groupTitleInput');
-  const invitationsModal = document.getElementById('invitationsModal');
-  const closeInvitationsModal = document.getElementById('closeInvitationsModal');
-  const invitationsList = document.getElementById('invitationsList');
+  const notificationsModal = document.getElementById('notificationsModal');
+  const closeNotificationsModal = document.getElementById('closeNotificationsModal');
+  const notificationsList = document.getElementById('notificationsList');
 
   async function openGroupChatModal() {
     try {
@@ -1810,7 +1878,8 @@ document.addEventListener('DOMContentLoaded', () => {
           const row = document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.padding='6px 4px';
           const cb = document.createElement('input'); cb.type='checkbox'; cb.dataset.userid = u.id;
           const img = document.createElement('img'); img.src = u.avatar_url || '/imagen/default-avatar.png'; img.style.width='36px'; img.style.height='36px'; img.style.borderRadius='50%'; img.style.objectFit='cover';
-          const txt = document.createElement('div'); txt.innerHTML = `<strong>${u.full_name || u.email}</strong><div style="font-size:12px;color:var(--muted)">${u.profile_description ? u.profile_description.substr(0,80) : ''}</div>`;
+          const badgeHtml = u.verified_role ? (String(u.verified_role).toUpperCase() === 'ADMIN' ? '<span class="verified-badge admin" title="Administrador verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M9.5 16.5L5 12l1.4-1.4L9.5 13.7 17.6 5.6 19 7l-9.5 9.5z"></path></svg></span>' : '<span class="verified-badge artist" title="Artista verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M12 2C7.03 2 3 6.03 3 11c0 2.95 2.41 5.4 5.36 5.7.66.07 1.2.61 1.3 1.27.16 1.09 1.15 1.93 2.26 1.93 4.97 0 9-4.03 9-9S16.97 2 12 2zm-1 5a1 1 0 11.001 2.001A1 1 0 0111 7zm4 2a1 1 0 11.001 2.001A1 1 0 0115 9z"></path></svg></span>' ) : '';
+          const txt = document.createElement('div'); txt.innerHTML = `<strong>${u.full_name || u.email}</strong>${badgeHtml}<div style="font-size:12px;color:var(--muted)">${u.profile_description ? u.profile_description.substr(0,80) : ''}</div>`;
           row.appendChild(cb); row.appendChild(img); row.appendChild(txt);
           groupContactsList.appendChild(row);
         });
@@ -1834,81 +1903,69 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { console.error('sendGroupInvites', e); alert('Error enviando invitaciones'); }
   });
 
-  // Invitations modal
-  async function openInvitationsModal() {
+  // Notifications modal
+  async function openNotificationsModal() {
     try {
-      invitationsList.innerHTML = '<div class="muted">Cargando...</div>';
-      const res = await fetch(`${API_BASE}/api/chats/invitations`, { credentials: 'include' });
-      if (!res.ok) { invitationsList.innerHTML = '<div class="muted">Error cargando invitaciones</div>'; return; }
+      notificationsList.innerHTML = '<div class="muted">Cargando...</div>';
+      const res = await fetch(`${API_BASE}/api/notifications`, { credentials: 'include' });
+      if (!res.ok) { notificationsList.innerHTML = '<div class="muted">Error cargando notificaciones</div>'; return; }
       const j = await res.json(); const items = j.data || [];
-      if (!items.length) { invitationsList.innerHTML = '<div class="muted">No tienes invitaciones</div>'; }
+      if (!items.length) { notificationsList.innerHTML = '<div class="muted">No tienes notificaciones</div>'; }
       else {
-        invitationsList.innerHTML = '';
-        items.forEach(inv => {
+        notificationsList.innerHTML = '';
+        items.forEach(n => {
           const row = document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.style.padding='8px'; row.style.borderBottom='1px solid var(--border)';
+          const avatar = document.createElement('img'); avatar.src = (n.actor && n.actor.avatar_url) ? n.actor.avatar_url : '/imagen/default-avatar.png'; avatar.style.width='40px'; avatar.style.height='40px'; avatar.style.borderRadius='50%'; avatar.style.objectFit='cover';
           const info = document.createElement('div'); info.style.flex='1';
-          const inviterId = inv.chat_invite_groups && inv.chat_invite_groups.inviter_id ? inv.chat_invite_groups.inviter_id : null;
-          const title = inv.chat_invite_groups && inv.chat_invite_groups.title ? inv.chat_invite_groups.title : 'Invitación a chat grupal';
-          info.innerHTML = `<div style="font-weight:700">${title}</div><div class="muted">Invitado por: ${inviterId || 'Usuario'}</div>`;
-          const acceptBtn = document.createElement('button'); acceptBtn.className='btn primary'; acceptBtn.textContent='Aceptar';
-          const rejectBtn = document.createElement('button'); rejectBtn.className='btn ghost'; rejectBtn.textContent='Rechazar';
-          acceptBtn.addEventListener('click', async ()=>{
-            try {
-              const r = await fetch(`${API_BASE}/api/chats/invitations/${inv.id}/respond`, { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ accept: true }) });
-              if (!r.ok) { const j = await r.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error aceptando invitación'); return; }
-              const j = await r.json().catch(()=>null);
-              alert('Has aceptado la invitación');
-              // si el servidor creó el chat, abrirlo
-              try { if (j && j.result && j.result.chat_id) { await fetchChats(); openGroupChat(j.result.chat_id, (j.result.title || inv.chat_invite_groups && inv.chat_invite_groups.title)); return; } } catch(e){}
-              openInvitationsModal();
-            } catch (e) { console.error('accept invite error', e); alert('Error aceptando invitación'); }
-          });
-          rejectBtn.addEventListener('click', async ()=>{
-            try {
-              const r = await fetch(`${API_BASE}/api/chats/invitations/${inv.id}/respond`, { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ accept: false }) });
-              if (!r.ok) { const j = await r.json().catch(()=>null); alert((j && j.error) ? j.error : 'Error rechazando invitación'); return; }
-              alert('Has rechazado la invitación');
-              openInvitationsModal();
-            } catch (e) { console.error('reject invite error', e); alert('Error rechazando invitación'); }
-          });
-          row.appendChild(info); row.appendChild(acceptBtn); row.appendChild(rejectBtn);
-          invitationsList.appendChild(row);
+          const actorName = (n.actor && n.actor.full_name) ? n.actor.full_name : 'Usuario';
+          const badgeHtml = (n.actor && (n.actor.verified_role || n.actor.verified)) ? (String(n.actor.verified_role || n.actor.verified).toUpperCase() === 'ADMIN' ? '<span class="verified-badge admin" title="Administrador verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M9.5 16.5L5 12l1.4-1.4L9.5 13.7 17.6 5.6 19 7l-9.5 9.5z"></path></svg></span>' : '<span class="verified-badge artist" title="Artista verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M12 2C7.03 2 3 6.03 3 11c0 2.95 2.41 5.4 5.36 5.7.66.07 1.2.61 1.3 1.27.16 1.09 1.15 1.93 2.26 1.93 4.97 0 9-4.03 9-9S16.97 2 12 2zm-1 5a1 1 0 11.001 2.001A1 1 0 0111 7zm4 2a1 1 0 11.001 2.001A1 1 0 0115 9z"></path></svg></span>') : '';
+          let msg = '';
+          if (n.type === 'follow') msg = `${actorName}${badgeHtml} te siguió.`;
+          else if (n.type === 'like') msg = `${actorName}${badgeHtml} le dio like a tu foto.`;
+          else if (n.type === 'comment') msg = `${actorName}${badgeHtml} comentó: "${(n.text||'').slice(0,80)}"`;
+          const when = document.createElement('div'); when.className='muted'; when.style.fontSize='12px'; when.textContent = n.created_at ? (new Date(n.created_at)).toLocaleString() : '';
+          info.innerHTML = `<div style="font-weight:700">${msg}</div>`;
+          info.appendChild(when);
+          row.appendChild(avatar);
+          row.appendChild(info);
+          // optional thumbnail when applicable
+          if (n.photo && n.photo.url) {
+            const thumb = document.createElement('img'); thumb.src = n.photo.url; thumb.style.width='56px'; thumb.style.height='44px'; thumb.style.objectFit='cover'; thumb.style.borderRadius='6px'; thumb.style.cursor='pointer';
+            thumb.addEventListener('click', (ev)=>{ ev.stopPropagation(); try { openView(n.photo, 0); } catch(e){} });
+            row.appendChild(thumb);
+          }
+          notificationsList.appendChild(row);
         });
       }
-      invitationsModal.classList.remove('hidden'); invitationsModal.setAttribute('aria-hidden','false');
-    } catch (e) { console.error('openInvitationsModal', e); invitationsList.innerHTML = '<div class="muted">Error</div>'; }
+      notificationsModal.classList.remove('hidden'); notificationsModal.setAttribute('aria-hidden','false');
+    } catch (e) { console.error('openNotificationsModal', e); notificationsList.innerHTML = '<div class="muted">Error</div>'; }
   }
 
-  if (closeInvitationsModal) closeInvitationsModal.addEventListener('click', ()=>{ invitationsModal.classList.add('hidden'); invitationsModal.setAttribute('aria-hidden','true'); });
+  if (closeNotificationsModal) closeNotificationsModal.addEventListener('click', ()=>{ notificationsModal.classList.add('hidden'); notificationsModal.setAttribute('aria-hidden','true'); });
 
-  // Polling periódico para actualizar badge de invitaciones y abrir modal al hacer click
+  // Polling periódico para actualizar badge de notificaciones y abrir modal al hacer click
   const invitationsBtn = document.getElementById('invitationsBtn');
-  const invitationsBadge = document.getElementById('invitationsBadge');
-  async function fetchInvitationCount() {
+  const notificationsBadge = document.getElementById('notificationsBadge');
+  async function fetchNotificationCount() {
     try {
-      const r = await fetch(`${API_BASE}/api/chats/invitations`, { credentials: 'include' });
-      if (!r.ok) {
-        if (invitationsBadge) invitationsBadge.style.display = 'none';
-        return;
-      }
+      const r = await fetch(`${API_BASE}/api/notifications`, { credentials: 'include' });
+      if (!r.ok) { if (notificationsBadge) notificationsBadge.style.display='none'; return; }
       const j = await r.json().catch(()=>({ data: [] }));
       const items = (j && j.data) ? j.data : [];
-      const pending = (items || []).filter(i => (i.status || 'pending') === 'pending').length;
-      if (invitationsBadge) {
-        if (pending > 0) { invitationsBadge.style.display = 'flex'; invitationsBadge.textContent = String(pending); }
-        else { invitationsBadge.style.display = 'none'; }
+      const count = (items || []).length;
+      if (notificationsBadge) {
+        if (count > 0) { notificationsBadge.style.display = 'flex'; notificationsBadge.textContent = String(count); }
+        else { notificationsBadge.style.display = 'none'; }
       }
-    } catch (e) {
-      // silent
-    }
+    } catch (e) { /* silent */ }
   }
 
   if (invitationsBtn) {
-    invitationsBtn.addEventListener('click', (ev) => { ev.preventDefault(); try { openInvitationsModal(); } catch(e){ window.dispatchEvent(new CustomEvent('openInvitationsPanel')); } });
+    invitationsBtn.addEventListener('click', (ev) => { ev.preventDefault(); try { openNotificationsModal(); } catch(e){ window.dispatchEvent(new CustomEvent('openNotificationsPanel')); } });
   }
   // Arrancar polling inmediato y cada 20s
-  fetchInvitationCount();
-  setInterval(fetchInvitationCount, 20_000);
+  fetchNotificationCount();
+  setInterval(fetchNotificationCount, 20_000);
 
   // --- Chats: fetch list of chats and open group chat ---
   async function fetchChats() {
@@ -2178,13 +2235,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const rows = j.data || [];
       if (!rows.length) { panelInbox.innerHTML = '<div class="muted">No tienes mensajes</div>'; return; }
       // rows have { sender_id, user, unread, last_message }
-      const nodes = rows.map(r => {
+        const nodes = rows.map(r => {
         const u = r.user || { id: r.sender_id };
         const unread = r.unread || 0;
         const last = r.last_message || {};
         const avatar = (u && u.avatar_url) ? u.avatar_url : '/imagen/default-avatar.png';
         const name = u.full_name || u.email || ('Usuario ' + (u.id || r.sender_id));
-        return `<div class="panel-inbox-item" data-sender="${r.sender_id}" style="display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid rgba(0,0,0,0.06);cursor:pointer;background:${unread>0 ? 'linear-gradient(90deg, rgba(225,29,72,0.06), transparent)' : 'transparent'}"><img src='${avatar}' style='width:36px;height:36px;border-radius:999px;object-fit:cover' /><div style='flex:1'><div style='display:flex;justify-content:space-between;align-items:center'><div style='font-weight:600'>${escapeHtml(name)}</div>${unread>0?`<div style='background:#e11d48;color:#fff;border-radius:999px;padding:2px 8px;font-size:12px'>${unread}</div>`:''}</div><div style='font-size:12px;color:var(--muted);max-height:36px;overflow:hidden'>${escapeHtml(last.content || '')}</div></div></div>`;
+        const badgeHtml = u && (u.verified_role || u.verified) ? (String(u.verified_role || u.verified).toUpperCase() === 'ADMIN' ? '<span class="verified-badge admin" title="Administrador verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M9.5 16.5L5 12l1.4-1.4L9.5 13.7 17.6 5.6 19 7l-9.5 9.5z"></path></svg></span>' : '<span class="verified-badge artist" title="Artista verificado"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path class="icon" d="M12 2C7.03 2 3 6.03 3 11c0 2.95 2.41 5.4 5.36 5.7.66.07 1.2.61 1.3 1.27.16 1.09 1.15 1.93 2.26 1.93 4.97 0 9-4.03 9-9S16.97 2 12 2zm-1 5a1 1 0 11.001 2.001A1 1 0 0111 7zm4 2a1 1 0 11.001 2.001A1 1 0 0115 9z"></path></svg></span>') : '';
+        return `<div class="panel-inbox-item" data-sender="${r.sender_id}" style="display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid rgba(0,0,0,0.06);cursor:pointer;background:${unread>0 ? 'linear-gradient(90deg, rgba(225,29,72,0.06), transparent)' : 'transparent'}"><img src='${avatar}' style='width:36px;height:36px;border-radius:999px;object-fit:cover' /><div style='flex:1'><div style='display:flex;justify-content:space-between;align-items:center'><div style='font-weight:600'>${escapeHtml(name)}${badgeHtml}</div>${unread>0?`<div style='background:#e11d48;color:#fff;border-radius:999px;padding:2px 8px;font-size:12px'>${unread}</div>`:''}</div><div style='font-size:12px;color:var(--muted);max-height:36px;overflow:hidden'>${escapeHtml(last.content || '')}</div></div></div>`;
       }).join('');
       panelInbox.innerHTML = nodes;
       panelInbox.querySelectorAll('.panel-inbox-item').forEach(n => n.addEventListener('click', async () => {

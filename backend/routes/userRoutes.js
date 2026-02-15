@@ -20,7 +20,7 @@ export default function(supabase) {
       if (!q) return res.json([]);
       const pattern = `%${q}%`;
       const { data, error } = await supabase.from('usuarios')
-        .select('id,full_name,email,avatar_url,profile_description')
+        .select('id,full_name,email,avatar_url,profile_description,verified_role')
         .or(`full_name.ilike.${pattern},email.ilike.${pattern}`)
         .limit(30);
       if (error) return res.status(500).json({ error: error.message || error });
@@ -103,7 +103,7 @@ export default function(supabase) {
     try {
       const id = Number(req.params.id);
       if (!id) return res.status(400).json({ error: 'Invalid id' });
-      const { data, error } = await supabase.from('usuarios').select('id,full_name,email,avatar_url,profile_description').eq('id', id).limit(1).maybeSingle();
+      const { data, error } = await supabase.from('usuarios').select('id,full_name,email,avatar_url,profile_description,verified_role').eq('id', id).limit(1).maybeSingle();
       if (error) return res.status(500).json({ error: error.message || error });
       if (!data) return res.status(404).json({ error: 'Usuario no encontrado' });
       return res.json({ data });

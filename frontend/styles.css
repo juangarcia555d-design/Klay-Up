@@ -321,7 +321,7 @@ header {
   background: color-mix(in srgb, var(--primary) 10%, transparent) !important;
 }
 
-#invitationsBadge {
+#notificationsBadge {
   position: absolute;
   top: -4px;
   right: -4px;
@@ -406,6 +406,33 @@ header {
   border-bottom: none;
   border-top: 7px solid var(--card, #fff);
 }
+
+/* Badges de verificado junto al nombre */
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 12px;
+  color: #fff;
+  margin-left: 8px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+}
+.verified-badge.admin {
+  background: linear-gradient(135deg,#0284c7,#0369a1);
+}
+.verified-badge.artist {
+  background: #ffffff;
+  border: 1px solid #f59e0b;
+}
+.verified-badge svg { display: block; }
+.verified-badge.admin svg .icon { fill: #ffffff; }
+.verified-badge.artist svg .icon { fill: #f59e0b; }
+
 
 .brand-text {
   min-width: 0;

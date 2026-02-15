@@ -7,12 +7,14 @@ import photoRoutes from './routes/photoRoutes.js';
 import musicRoutes from './routes/musicRoutes.js';
 import createAuthRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import { supabase } from './config/supabase.js';
 import { isFollowing, countFollowers, countFollowing } from './models/followModel.js';
 import chatRoutes from './routes/chatRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -99,7 +101,7 @@ app.get('/profile', async (req, res) => {
     const userId = decoded?.userId;
     if (!userId) return res.redirect('/login');
     // obtener usuario
-    const { data: userData, error: userErr } = await supabase.from('usuarios').select('id,email,full_name,avatar_url,profile_description,theme').eq('id', userId).limit(1).maybeSingle();
+    const { data: userData, error: userErr } = await supabase.from('usuarios').select('id,email,full_name,avatar_url,profile_description,theme,verified_role').eq('id', userId).limit(1).maybeSingle();
     if (userErr || !userData) return res.redirect('/login');
     // obtener solo fotos de perfil (is_public = false) — evitar que los uploads públicos de la galería
     // se muestren automáticamente en la página de perfil del usuario.
@@ -132,7 +134,7 @@ app.get('/profile', async (req, res) => {
 app.get('/u/:id', async (req, res) => {
   try {
     const id = req.params.id;
-    const { data: userData, error: userErr } = await supabase.from('usuarios').select('id,email,full_name,avatar_url,profile_description,theme').eq('id', id).limit(1).maybeSingle();
+    const { data: userData, error: userErr } = await supabase.from('usuarios').select('id,email,full_name,avatar_url,profile_description,theme,verified_role').eq('id', id).limit(1).maybeSingle();
     if (userErr || !userData) return res.status(404).send('Perfil no encontrado');
     // comprobar si el visitante está autenticado y si es el dueño
     const token = req.cookies?.session_token || null;
@@ -251,8 +253,10 @@ app.get('/debug', async (req, res) => {
 app.use('/api/photos', photoRoutes);
 app.use('/api/music', musicRoutes);
 app.use('/api/users', userRoutes(supabase));
+app.use('/api/admin', adminRoutes(supabase));
 app.use('/api/messages', messageRoutes(supabase, SESSION_SECRET));
 app.use('/api/chats', chatRoutes(supabase, SESSION_SECRET));
+app.use('/api/notifications', notificationRoutes);
 
 // Iniciar servidor
 app.listen(PORT, () => {

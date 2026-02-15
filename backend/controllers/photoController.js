@@ -21,13 +21,17 @@ import jwt from 'jsonwebtoken';
 export async function listPhotos(req, res) {
   try {
     const { category } = req.query;
-    console.log('listPhotos called with category=', category);
+    const limit = req.query && req.query.limit ? Number(req.query.limit) : null;
+    const offset = req.query && req.query.offset ? Number(req.query.offset) : 0;
+    console.log('listPhotos called with category=', category, 'limit=', limit, 'offset=', offset);
     // Si se solicita una categoría concreta, devolverla.
     // Si no se especifica categoría, ocultar videos para que sólo se vean en la pestaña VIDEO.
     if (category) {
       // Sólo devolver fotos públicas cuando es una petición pública de galería
       try {
-          const { data, error } = await getPhotos(category).eq('is_public', true);
+          let q = getPhotos(category).eq('is_public', true);
+          if (limit && Number.isFinite(limit)) q = q.range(offset, offset + limit - 1);
+          const { data, error } = await q;
           if (error) return res.status(500).json({ error: error.message });
           const photos = data || [];
           const userIds = Array.from(new Set(photos.filter(p => p.user_id).map(p => p.user_id)));
@@ -57,12 +61,14 @@ export async function listPhotos(req, res) {
 
     // No hay categoría -> excluir VIDEO
     try {
-        const { data, error } = await supabase
+        let q = supabase
           .from('photos')
           .select('id, title, description, date_taken, category, url, user_id, created_at')
           .neq('category', 'VIDEO')
           .eq('is_public', true)
           .order('created_at', { ascending: false });
+        if (limit && Number.isFinite(limit)) q = q.range(offset, offset + limit - 1);
+        const { data, error } = await q;
         if (error) return res.status(500).json({ error: error.message });
         // Añadir información del uploader y conteos de reacciones
         const photos = data || [];
@@ -84,12 +90,14 @@ export async function listPhotos(req, res) {
     } catch (e) {
       // fallback si is_public no existe: asumimos que las fotos con user_id son uploads de perfil y no deben mostrarse
       try {
-        const { data, error } = await supabase
+        let q2 = supabase
           .from('photos')
           .select('id, title, description, date_taken, category, url, user_id, created_at')
           .neq('category', 'VIDEO')
           .is('user_id', null)
           .order('created_at', { ascending: false });
+        if (limit && Number.isFinite(limit)) q2 = q2.range(offset, offset + limit - 1);
+        const { data, error } = await q2;
         if (error) return res.status(500).json({ error: error.message });
         const photos = data || [];
         const enhanced = await Promise.all(photos.map(async (p) => {
