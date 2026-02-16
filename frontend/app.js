@@ -198,6 +198,59 @@ document.addEventListener('DOMContentLoaded', () => {
   const addCategoryTabBtn = document.getElementById('addCategoryTabBtn');
   const addCategoryContainer = document.getElementById('addCategoryContainer');
 
+  // --- Restaurar categorías personalizadas al cargar la página ---
+
+  function restoreCustomCategories() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('customCategories') || '[]');
+      if (Array.isArray(saved)) {
+        saved.forEach(cat => {
+          if (cat && typeof cat === 'string') createCategory(cat, false);
+        });
+      }
+    } catch (e) { /* ignore */ }
+  }
+  restoreCustomCategories();
+
+  // Eliminar categoría personalizada: quita del select, de las tabs y de localStorage
+  function deleteCategory(name) {
+    if (!name) return;
+    const val = name.trim();
+    if (!val) return;
+    // Eliminar del select
+    if (categorySelect) {
+      Array.from(categorySelect.options).forEach(opt => {
+        if ((opt.value || '').toLowerCase() === val.toLowerCase()) {
+          categorySelect.removeChild(opt);
+        }
+      });
+    }
+    // Eliminar la tab
+    if (tabsContainer) {
+      Array.from(tabsContainer.querySelectorAll('.tab')).forEach(tab => {
+        if ((tab.dataset.category || '').toLowerCase() === val.toLowerCase()) {
+          tabsContainer.removeChild(tab);
+        }
+      });
+    }
+    // Eliminar de localStorage
+    try {
+      let saved = JSON.parse(localStorage.getItem('customCategories') || '[]');
+      saved = saved.filter(s => (s || '').toLowerCase() !== val.toLowerCase());
+      localStorage.setItem('customCategories', JSON.stringify(saved));
+    } catch (e) { /* ignore */ }
+    // Si la categoría eliminada estaba activa, volver a 'Galería'
+    if ((currentCategory || '').toLowerCase() === val.toLowerCase()) {
+      const home = document.querySelector('.tab[data-category=""]');
+      if (home) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        home.classList.add('active');
+      }
+      currentCategory = '';
+      fetchPhotos({ force: true });
+    }
+  }
+
   // Delegación: manejar clicks en tabs y en el control de borrado dentro de la misma barra
   if (tabsContainer) {
     tabsContainer.addEventListener('click', (e) => {
@@ -253,6 +306,19 @@ document.addEventListener('DOMContentLoaded', () => {
         tabsContainer.appendChild(btn);
       }
     }
+
+    // Guardar en localStorage si es personalizada y se solicita persistencia
+    if (persist) {
+      try {
+        let saved = [];
+        try { saved = JSON.parse(localStorage.getItem('customCategories') || '[]'); } catch(e){}
+        if (!saved.includes(val)) {
+          saved.push(val);
+          localStorage.setItem('customCategories', JSON.stringify(saved));
+        }
+      } catch(e){}
+    }
+    return val;
 
 // Guardado automático de la descripción al escribir (siempre activo)
 document.addEventListener('DOMContentLoaded', () => {
