@@ -79,7 +79,6 @@ export async function listPhotos(req, res) {
           const { data: users } = await supabase.from('usuarios').select('id,full_name,avatar_url').in('id', userIds);
           usersMap = (users || []).reduce((acc, u) => { acc[String(u.id)] = u; return acc; }, {});
         }
-        // obtener reacciones para cada foto (conteos)
         const enhanced = await Promise.all(photos.map(async (p) => {
           const r = await getReactions(p.id);
           const uploader = p.user_id ? usersMap[String(p.user_id)] : null;

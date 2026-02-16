@@ -517,10 +517,12 @@ document.addEventListener('DOMContentLoaded', () => {
       // Guardar la posición del scroll antes de agregar
       const prevScrollHeight = gallery.scrollHeight;
       const prevScrollTop = window.scrollY;
-      // Agregar items a photosData
+      // Agregar todas las fotos a photosData (sin filtrar por group_id ni id)
       for (let k = 0; k < data.length; k++) {
         const item = data[k];
-        photosData.push(item);
+        if (!photosData.some(p => p.id === item.id)) {
+          photosData.push(item);
+        }
       }
       // Renderizar solo los nuevos elementos
       renderGalleryFromPhotos({ appendOnly: true, newItems: data });
@@ -534,11 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {}
       }
       removeSkeletons();
-      // Ajustar scroll solo si el usuario estaba cerca del final
-      const newScrollHeight = gallery.scrollHeight;
-      if (newScrollHeight > prevScrollHeight && (window.innerHeight + prevScrollTop + 120 >= prevScrollHeight)) {
-        window.scrollTo({ top: prevScrollTop + (newScrollHeight - prevScrollHeight), behavior: 'auto' });
-      }
+      // No ajustar el scroll automáticamente al cargar nuevas fotos. El usuario controla el scroll.
     } catch (err) {
       console.error('Error loadMorePhotos:', err);
       removeSkeletons();
@@ -553,57 +551,57 @@ document.addEventListener('DOMContentLoaded', () => {
         const count = (photosData || []).length;
         listTitle.textContent = currentCategory ? `Categoría: ${currentCategory} (${count} fotos)` : `Todas las fotos (${count})`;
       }
+      // Nueva agrupación estricta por group_id
+      // Ahora cada elemento de photosData es una publicación grupal (con array fotos) o una foto suelta
       const groups = [];
-      if (photosData.length > 0 && photosData[0].group_id !== undefined) {
-        // Agrupar por group_id si existe
-        const groupMap = {};
-        photosData.forEach((photo, idx) => {
-          const gid = photo.group_id || `__single__${photo.id}`;
-          if (!groupMap[gid]) groupMap[gid] = { items: [], startIndex: idx };
-          groupMap[gid].items.push(photo);
-        });
-        Object.values(groupMap).forEach(g => {
-          if (g.items.length > 1) groups.push({ type: 'group', items: g.items, startIndex: g.startIndex });
-          else groups.push({ type: 'single', item: g.items[0], index: g.startIndex });
-        });
-      } else {
-        // Agrupación antigua por coincidencia de campos
-        let i = 0;
-        while (i < (photosData || []).length) {
-          const base = photosData[i];
-          let group = [base];
-          let j = i + 1;
-          while (j < photosData.length && photosData[j].title === base.title && photosData[j].date_taken === base.date_taken && photosData[j].category === base.category) {
-            group.push(photosData[j]);
-            j++;
-          }
-          if (group.length > 1) groups.push({ type: 'group', items: group, startIndex: i });
-          else groups.push({ type: 'single', item: base, index: i });
-          i = j;
+      // Agrupar visualmente por group_id
+      const groupMap = {};
+      const singles = [];
+      for (let i = 0; i < photosData.length; i++) {
+        const photo = photosData[i];
+        if (photo.group_id) {
+          if (!groupMap[photo.group_id]) groupMap[photo.group_id] = [];
+          groupMap[photo.group_id].push(photo);
+        } else {
+          singles.push(photo);
         }
       }
-      // Si es appendOnly, solo renderizar los nuevos elementos
+      // Añadir grupos
+      Object.values(groupMap).forEach((arr, idx) => {
+        if (arr.length > 1) groups.push({ type: 'group', items: arr, startIndex: idx, meta: arr[0] });
+        else groups.push({ type: 'single', item: arr[0], index: idx, meta: arr[0] });
+      });
+      // Añadir individuales
+      singles.forEach((photo, idx) => {
+        groups.push({ type: 'single', item: photo, index: idx, meta: photo });
+      });
       if (opts.appendOnly && Array.isArray(opts.newItems)) {
-        // Calcular el índice de inicio para los nuevos elementos
-        const startIdx = photosData.length - opts.newItems.length;
-        let idx = startIdx;
-        opts.newItems.forEach(item => {
-          // Buscar si es grupo o single
-          if (item.group_id !== undefined) {
-            // Buscar el grupo correspondiente
-            const gid = item.group_id || `__single__${item.id}`;
-            const group = groups.find(g => g.type === 'group' && g.items.some(i => i.id === item.id));
-            if (group) renderGroup(group.items, group.startIndex);
-            else renderCard(item, idx);
+        // Solo renderizar los nuevos elementos
+        const newGroups = [];
+        // Agrupar los nuevos items igual que el resto
+        const groupMap = {};
+        const singles = [];
+        for (let i = 0; i < opts.newItems.length; i++) {
+          const photo = opts.newItems[i];
+          if (photo.group_id) {
+            if (!groupMap[photo.group_id]) groupMap[photo.group_id] = [];
+            groupMap[photo.group_id].push(photo);
           } else {
-            renderCard(item, idx);
+            singles.push(photo);
           }
-          idx++;
+        }
+        Object.values(groupMap).forEach((arr, idx) => {
+          if (arr.length > 1) newGroups.push({ type: 'group', items: arr, startIndex: idx, meta: arr[0] });
+          else newGroups.push({ type: 'single', item: arr[0], index: idx, meta: arr[0] });
         });
+        singles.forEach((photo, idx) => {
+          newGroups.push({ type: 'single', item: photo, index: idx, meta: photo });
+        });
+        newGroups.forEach(g => { if (g.type === 'group') renderGroup(g.items, g.startIndex, g.meta); else renderCard(g.item, g.index, g.meta); });
       } else {
-        // Renderizado completo (ej. cambio de categoría)
+        // Renderizado completo (ej. cambio de categoría o refresh)
         if (gallery) gallery.innerHTML = '';
-        groups.forEach(g => { if (g.type === 'group') renderGroup(g.items, g.startIndex); else renderCard(g.item, g.index); });
+        groups.forEach(g => { if (g.type === 'group') renderGroup(g.items, g.startIndex, g.meta); else renderCard(g.item, g.index, g.meta); });
       }
       // No items message
       if ((!photosData || photosData.length === 0) && gallery) {
