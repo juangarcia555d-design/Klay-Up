@@ -514,14 +514,16 @@ document.addEventListener('DOMContentLoaded', () => {
         isLoadingPhotos = false;
         return;
       }
+      // Guardar la posición del scroll antes de agregar
+      const prevScrollHeight = gallery.scrollHeight;
+      const prevScrollTop = window.scrollY;
       // Agregar items a photosData
       for (let k = 0; k < data.length; k++) {
         const item = data[k];
         photosData.push(item);
       }
-      // Limpiar galería y renderizar agrupando correctamente
-      if (gallery) gallery.innerHTML = '';
-      renderGalleryFromPhotos();
+      // Renderizar solo los nuevos elementos
+      renderGalleryFromPhotos({ appendOnly: true, newItems: data });
       // advance offset
       currentOffset = (currentOffset || 0) + (Array.isArray(data) ? data.length : 0);
       if (!Array.isArray(data) || data.length < pageSize) {
@@ -532,6 +534,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {}
       }
       removeSkeletons();
+      // Ajustar scroll solo si el usuario estaba cerca del final
+      const newScrollHeight = gallery.scrollHeight;
+      if (newScrollHeight > prevScrollHeight && (window.innerHeight + prevScrollTop + 120 >= prevScrollHeight)) {
+        window.scrollTo({ top: prevScrollTop + (newScrollHeight - prevScrollHeight), behavior: 'auto' });
+      }
     } catch (err) {
       console.error('Error loadMorePhotos:', err);
       removeSkeletons();
@@ -539,7 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isLoadingPhotos = false;
   }
 
-  function renderGalleryFromPhotos() {
+  function renderGalleryFromPhotos(opts = {}) {
     try {
       // Mostrar contador en el título
       if (listTitle) {
@@ -575,7 +582,29 @@ document.addEventListener('DOMContentLoaded', () => {
           i = j;
         }
       }
-      groups.forEach(g => { if (g.type === 'group') renderGroup(g.items, g.startIndex); else renderCard(g.item, g.index); });
+      // Si es appendOnly, solo renderizar los nuevos elementos
+      if (opts.appendOnly && Array.isArray(opts.newItems)) {
+        // Calcular el índice de inicio para los nuevos elementos
+        const startIdx = photosData.length - opts.newItems.length;
+        let idx = startIdx;
+        opts.newItems.forEach(item => {
+          // Buscar si es grupo o single
+          if (item.group_id !== undefined) {
+            // Buscar el grupo correspondiente
+            const gid = item.group_id || `__single__${item.id}`;
+            const group = groups.find(g => g.type === 'group' && g.items.some(i => i.id === item.id));
+            if (group) renderGroup(group.items, group.startIndex);
+            else renderCard(item, idx);
+          } else {
+            renderCard(item, idx);
+          }
+          idx++;
+        });
+      } else {
+        // Renderizado completo (ej. cambio de categoría)
+        if (gallery) gallery.innerHTML = '';
+        groups.forEach(g => { if (g.type === 'group') renderGroup(g.items, g.startIndex); else renderCard(g.item, g.index); });
+      }
       // No items message
       if ((!photosData || photosData.length === 0) && gallery) {
         const m = document.createElement('div');
