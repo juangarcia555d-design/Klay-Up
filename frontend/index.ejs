@@ -27,8 +27,8 @@
         <input type="color" id="colorPicker" value="<%= initialTheme %>">
         <button class="preset" data-color="#141414">Oscuro</button>
         <button class="preset" data-color="#ffffff">Claro</button>
-        <button class="preset" data-color="#5b59a6">Azul</button>
-        <button class="preset" data-color="#4a6d6b">Verde</button>
+        <button class="preset" data-color="#172F4F">Azul</button>
+        <button class="preset" data-color="#17484F">Verde</button>
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin-left:12px;">
           <div style="position:relative;">
@@ -48,10 +48,16 @@
   </header>
 
   <nav class="tabs">
-  <button class="tab active" data-category="" data-default="true">Galería <span class="tab-delete" title="Eliminar categoría">✕</span></button>
-  <button class="tab" data-category="FOTOS" data-default="true">Fotos <span class="tab-delete" title="Eliminar categoría">✕</span></button>
-  <button class="tab" data-category="RECUERDOS" data-default="true">Recuerdos <span class="tab-delete" title="Eliminar categoría">✕</span></button>
-  <button class="tab" data-category="VIDEO" data-default="true">Videos <span class="tab-delete" title="Eliminar categoría">✕</span></button>
+    <button class="tab active" data-category="" data-default="true">Galería</button>
+    <button class="tab" data-category="FOTOS" data-default="true">Fotos</button>
+    <button class="tab" data-category="RECUERDOS" data-default="true">Recuerdos</button>
+    <button class="tab" data-category="VIDEO" data-default="true">Videos</button>
+    <!-- Solo las categorías personalizadas tendrán el botón de eliminar -->
+    <% if (typeof userCategories !== 'undefined' && Array.isArray(userCategories)) { %>
+      <% userCategories.forEach(function(cat) { %>
+        <button class="tab" data-category="<%= cat %>" data-default="false"><%= cat %> <span class="tab-delete" title="Eliminar categoría">✕</span></button>
+      <% }); %>
+    <% } %>
     <button id="addCategoryTabBtn" class="tab" title="Agregar categoría">+</button>
     <div id="addCategoryContainer" style="display:inline-block; margin-left:8px;"></div>
   </nav>

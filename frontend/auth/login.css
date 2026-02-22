@@ -1,14 +1,261 @@
-/* Login page styles — profesional y consistente con el sitio */
-:root{--bg:#f8fafc;--card:#ffffff;--muted:#6b7280;--accent:#4f46e5;--text:#0b0f1a}
-body{font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0}
-.auth-page{display:flex;align-items:center;justify-content:center;height:100vh}
-.auth-wrapper{background:var(--card);padding:32px;border-radius:12px;box-shadow:0 6px 20px rgba(10,10,10,0.06);width:420px;max-width:94%;text-align:center}
-.auth-wrapper h1{margin:0 0 8px;font-size:28px}
-.auth-wrapper p{margin:0 0 18px;color:var(--muted)}
-.auth-wrapper form{display:flex;flex-direction:column;gap:10px}
-.auth-wrapper input[type=email],.auth-wrapper input[type=password]{padding:12px;border:1px solid #e6e9ef;border-radius:8px;font-size:14px}
-.auth-wrapper button{background:var(--accent);color:#fff;padding:10px 12px;border:0;border-radius:8px;cursor:pointer}
-.auth-wrapper button[type=button]{background:transparent;color:var(--accent);border:1px solid var(--accent)}
-.form-error{color:#b91c1c;background:#fff6f6;padding:8px;border-radius:8px;border:1px solid #fca5a5;margin-top:6px;font-size:13px}
-.auth-wrapper a{color:var(--accent);text-decoration:none}
-@media (max-width:480px){.auth-wrapper{padding:20px;width:92%}}
+/* Video de fondo */
+.video-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+
+
+
+/* Overlay para mejorar legibilidad */
+.video-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 100%);
+  z-index: -1;
+}
+
+/* Login page styles */
+:root {
+  --accent: #6366f1;
+  --accent-dark: #4f46e5;
+  --accent-light: #818cf8;
+  --success: #10b981;
+  --error: #ef4444;
+}
+
+.auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 16px;
+  position: relative;
+}
+
+.auth-wrapper {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10px);
+  padding: 48px 40px;
+  border-radius: 32px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  width: 440px;
+  max-width: 100%;
+  text-align: center;
+  animation: slideUp 0.5s ease-out;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-logo {
+  width: 160px;
+  height: auto;
+  margin: 0 auto 24px;
+  display: block;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+  transition: transform 0.3s ease;
+}
+
+.auth-logo:hover {
+  transform: scale(1.05);
+}
+
+.auth-wrapper p {
+  color: #4b5563;
+  font-size: 16px;
+  margin: 0 0 28px;
+  line-height: 1.5;
+}
+
+.auth-wrapper form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+/* Estilo para los inputs */
+.auth-wrapper input[type="email"],
+.auth-wrapper input[type="password"] {
+  padding: 16px 18px;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.9);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.auth-wrapper input[type="email"]:hover,
+.auth-wrapper input[type="password"]:hover {
+  border-color: var(--accent-light);
+}
+
+.auth-wrapper input[type="email"]:focus,
+.auth-wrapper input[type="password"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  background: white;
+}
+
+/* Estilo para los botones */
+.auth-wrapper button {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  letter-spacing: 0.5px;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-wrapper button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4);
+}
+
+.auth-wrapper button:active {
+  transform: translateY(0);
+}
+
+.auth-wrapper button[type="button"] {
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  box-shadow: none;
+}
+
+.auth-wrapper button[type="button"]:hover {
+  background: rgba(99, 102, 241, 0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.2);
+}
+
+/* Separador elegante */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #9ca3af;
+  font-size: 14px;
+  margin: 16px 0;
+}
+
+.divider-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+}
+
+/* Enlace de registro */
+.auth-wrapper a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  position: relative;
+  display: inline-block;
+}
+
+.auth-wrapper a:hover {
+  color: var(--accent-dark);
+  transform: translateY(-1px);
+}
+
+.auth-wrapper a::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+  transition: width 0.3s ease;
+}
+
+.auth-wrapper a:hover::after {
+  width: 100%;
+}
+
+/* Mensaje de error */
+.form-error {
+  color: var(--error);
+  background: #fef2f2;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #fee2e2;
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .auth-wrapper {
+    padding: 32px 24px;
+    border-radius: 24px;
+  }
+  
+  .auth-wrapper button {
+    padding: 14px 20px;
+  }
+  
+  .auth-wrapper input[type="email"],
+  .auth-wrapper input[type="password"] {
+    padding: 14px 16px;
+  }
+}
+
+/* Efecto de brillo para el botón principal */
+.auth-wrapper button[type="submit"]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.auth-wrapper button[type="submit"]:hover::before {
+  left: 100%;
+}
+
+
+
+
+
+
