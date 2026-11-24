@@ -101,7 +101,13 @@ export function loginHandler(supabase, sessionSecret) {
       const emailStr = String(email).trim().toLowerCase();
 
       const { data, error } = await supabase.from('usuarios').select('*').eq('email', emailStr).limit(1).maybeSingle();
-      if (error) return res.status(500).json({ error: 'Error consultando usuario' });
+      if (error) {
+        console.error('Error consultando usuario para login:', {
+          code: error.code,
+          message: error.message
+        });
+        return res.status(500).json({ error: 'Error consultando usuario' });
+      }
       if (!data) {
         const acceptHeader = (req.headers['accept'] || '');
         if (acceptHeader.includes('text/html')) return res.redirect('/login?error=1');
